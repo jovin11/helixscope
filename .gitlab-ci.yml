@@ -30,25 +30,27 @@ test:
     - sleep 5
     - curl -f http://127.0.0.1:5001 || exit 1
 
-run:
-  script:
-    - pip install .
-    # Add the command to run your app if needed
-  artifacts:
-    paths:
-      - build/*
+# Commented out the pages job for now
+# pages:
+#   script:
+#     - pip install sphinx sphinx-rtd-theme
+#     - cd doc
+#     - make html
+#     - mv build/html/ ../public/
+#   artifacts:
+#     paths:
+#       - public
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-pages:
-  script:
-    - pip install sphinx sphinx-rtd-theme
-    - cd doc
-    - make html
-    - mv build/html/ ../public/
-  artifacts:
-    paths:
-      - public
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+# Commented out the run job for now
+# run:
+#   script:
+#     - pip install .
+#     # Add the command to run your app if needed
+#   artifacts:
+#     paths:
+#       - build/*
 
 deploy:
   stage: deploy
