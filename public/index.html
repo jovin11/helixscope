@@ -1,27 +1,19 @@
 <!DOCTYPE html>
+
 <html>
-<head>
-    <title>Protein Secondary Structure Predictor</title>
-</head>
-<body>
-    <h1>Protein Secondary Structure Predictor</h1>
-    <form id="prediction-form">
-        <textarea id="sequence" placeholder="Enter protein sequence"></textarea>
-        <button type="submit">Predict</button>
-    </form>
-    <div id="result"></div>
-    <script>
-        document.getElementById('prediction-form').onsubmit = async (e) => {
-            e.preventDefault();
-            const sequence = document.getElementById('sequence').value;
-            const response = await fetch('http://localhost:5001/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sequence })
-            });
-            const result = await response.json();
-            document.getElementById('result').innerText = JSON.stringify(result.prediction);
-        };
-    </script>
-</body>
+    <head>
+        <title>PSSP</title>
+    </head>
+    <body>
+        <h1>Protein Secondary Structure Predictor</h1>
+        <a>This project is a web application for predicting the secondary structure of proteins from their amino acid sequences. It uses a NodeJS Express backend to handle web requests and a Python Flask service for running the deep learning model.</a>
+
+        <h2>Features</h2>
+        <a>Secondary Structure Prediction: Predicts alpha-helices, beta-sheets, and coils from amino acid sequences.
+            Web Interface: Simple web interface for inputting protein sequences and viewing predictions.
+            Integration of NodeJS and Python: Combines the strengths of NodeJS for handling web requests and Python for machine learning.</a>
+    </body>
 </html>
+
+
+
