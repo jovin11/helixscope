@@ -1,3 +1,4 @@
 flask
+biopython
 tensorflow
 numpy
