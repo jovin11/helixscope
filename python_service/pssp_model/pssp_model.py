@@ -10,7 +10,8 @@ from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.layers import Conv1D, LSTM, Dense, Dropout, TimeDistributed, MaxPooling1D
 from tensorflow.keras.layers import Input, Embedding, GlobalMaxPooling1D, Masking, BatchNormalization, Flatten
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.regularizers import l2
 from Bio.PDB import PDBList, PDBParser, DSSP
 
 # ------------------------------------------------------------------------------------------------------------------------------------
@@ -23,7 +24,7 @@ from Bio.PDB import PDBList, PDBParser, DSSP
 # all_pdb_ids = pdb_list.get_all_entries()
 
 # # Randomly select 500 PDB IDs from the full list
-# selected_pdb_ids = random.sample(all_pdb_ids, 500)
+# selected_pdb_ids = random.sample(all_pdb_ids, 600)
 
 # # Print or store the selected PDB IDs
 # print(selected_pdb_ids)
@@ -32,7 +33,7 @@ from Bio.PDB import PDBList, PDBParser, DSSP
 
 # 634 ids
 # List of more PDB IDs for a larger dataset (example IDs, replace with actual ones)
-pdb_ids = ['1A8M', '1BNA', '1C0A', '1D3Z', '1E7P', '1F9T', '1GID', '1H9N', '1JFF', '1KX5', '1L2Y', '1N8O', '1O5R', '1P6X', '1R4Z',
+pdb_ids = ['1A8M', '1BNA', '1C0A', '1D3Z', '1E7P', '1F9T', '1GID', '1H9N', '1JFF', '1KX5', '1L2Y', '1N8O', '1O5R', '1P6X', '1R4Z', 
            '1S7Y', '1T8W', '1U9Z', '1A6M', '1BVC', '1CEX', '1D4T', '1E7O', '1F3H', '1GFL', '1HNI', '1IDH', '1J5E', '1K5D', '1M1T', 
            '1N9X', '1O3Y', '1Q8Z', '1R2Y', '1S1D', '1U6Q', '1V3W', '1W1Z', '1X3A', '1Y4B', '1Z6C', '2A7D', '2B8E', '2C9F', '2D0G', 
            '2E1H', '2F2I', '2G3J', '2H4K', '2I5L', '2J6M', '2K7N', '2M9P', '2N0Q', '2P2S', '2Q3T', '2R4U', '2V8Y', '2W9Z', '3A1A', 
@@ -40,41 +41,10 @@ pdb_ids = ['1A8M', '1BNA', '1C0A', '1D3Z', '1E7P', '1F9T', '1GID', '1H9N', '1JFF
            '3R8R', '3S9S', '3T0T', '3U1U', '3V2V', '3W3W', '4B2B', '4C3C', '4D4D', '4E5E', '4F6F', '4G7G', '4H8H', '4I9I', '4J0J', 
            '4K1K', '4L2L', '4M3M', '4N4N', '4O5O', '4P6P', '4Q7Q', '4R8R', '4V2V', '4X4X', '4Y5Y', '4Z6Z', '5A1A', '5C3C', '5D4D', 
            '5E5E', '5F6F', '5H8H', '5I9I', '5J0J', '5K1K', '2HRK', '3A5X', '4XYZ', '6ZP7', '3R2C', '2FL7', '4H57', '1BCX', '2B4D', 
-           '5C67', '5N8E', '5O8F', '5P8G', '5Q8H', '5R8I', '5S8J', '5T8K', '5U8L', '5V8M', '5Y8P', '5Z8Q', '6A8R', '6B8S', '6D8U', 
-           '6E8V', '6F8W', '6G8X', '6H8Y', '6I8Z', '6J90', '6K91', '6L92', '6M93', '6N94', '6O95', '6P96', '6U9B', '6V9C', '6W9D', 
-           '6Y9F', '6Z9G', '7B9I', '7D9K', '7E9L', '7G9N', '7K9R', '7L9S', '7M9T', '7N9U', '7P9W', '7R9Y', '7S9Z', '7T10', '7U11', 
-           '7V12', '7W13', '7X14', '7Y15', '8A17', '8B18', '8C19', '8E1B', '8F1C', '8H1E', '8I1F', '8K1H', '8P1M', '8Q1N', '8R1O', 
-           '8T1Q', '8U1R', '7BJB', '1HAI', '5LOM', '7KE6', '1NQ6', '6SVB', '4MUF', '8D5W', '4INB', '4UAW', '4IQI', '6X0O', '1OUK', 
-           '7V3G', '6SST', '8BX6', '8F5M', '2OV4', '7FTT', '4LLH', '7MYA', '6O4G', '1PR5', '2DV7', '3VC0', '8EYI', '7KJ0', '7WF5', 
-           '1V61', '3S2E', '1X46', '3PTM', '7SXQ', '1G4C', '6UJN', '4CTX', '4L3P', '7BY5', '6HK4', '8I9E', '1GE5', '1KGW', '6YTZ', 
-           '3VR2', '6I1Z', '2LRA', '6RIT', '4KI1', '1M1Q', '5DFP', '2FQL', '1W5Z', '3KUT', '1ZZ3', '1IWZ', '8DFH', '2A87', '3SPZ',
-           '3HNL', '7L7S', '6HVA', '7JGP', '2UVD', '2J3G', '3Q3I', '3V0N', '2EC5', '2O70', '3NYS', '7N7P', '6SVM', '6BRR', '5TQE', 
-           '2RS7', '1VLL', '2RT6', '2IED', '1QAJ', '4KMS', '1DJ0', '6OS0', '4Y9Y', '3GAC', '1Z6A', '7MVS', '1P1G', '7FBQ', '2GMS', 
-           '2RAT', '1R5B', '6ANU', '1RCJ', '4CJ0', '2UZS', '2RK9', '1PPJ', '3HWX', '6NQY', '6WL6', '1T1Y', '5EPS', '3PXN', '2DP4', 
-           '2K2D', '2OYK', '7AEG', '3LJ0', '4AKJ', '8FQH', '4TU7', '6M9S', '4HWB', '5B3K', '1MA7', '6DI6', '8Y6P', '4CT6', '2E09', 
-           '1M5X', '1CKF', '8UH9', '4M8Q', '3DCA', '2DVW', '6MBE', '8J78', '5K0R', '5JA3', '4OI1', '8FU4', '8G6Q', '3BH8', '5SD0', 
-           '6LN5', '4JDI', '6FU4', '4PI3', '7ZWF', '8IZY', '7DK6', '1D7L', '5YT2', '6INT', '4QSS', '8GFZ', '8C6H', '5K90', '4OFP', 
-           '5P6U', '6EOD', '4IQV', '6PTN', '2H16', '4I19', '6WQ9', '5HDH', '5JQX', '193L', '6GW2', '8D4T', '5XB0', '4XF2', '2K51', 
-           '3Q6K', '6U7P', '1LQA', '7RZ1', '5D3R', '6EIR', '8VTZ', '8TVZ', '2Q8L', '5T8U', '1N76', '3TGV', '3IY1', '1NP1', '4KP5', 
-           '7GU6', '2F9R', '6I04', '2JVG', '3I7H', '1MIY', '3ZS1', '3TKA', '7S0R', '7MK3', '2H4E', '3OQL', '6JTJ', '1ZOR', '6R53', 
-           '6IKO', '7P8X', '7B4S', '4PPJ', '8W0D', '8I1D', '1RQA', '4ZJG', '3RPU', '2GVG', '6VD2', '8J5W', '7YJK', '3UHN', '6BDU', 
-           '6RFB', '8SHK', '6R0H', '8E6J', '7NGY', '6Y75', '5W2U', '2VOV', '1AA2', '6WOG', '1VGG', '8P22', '3KDS', '5Y51', '1IZL', 
-           '8KE8', '1UW1', '2CNF', '4CNU', '1S8I', '2P1Q', '5BP1', '4PJ7', '5WYN', '6P3L', '4MB3', '6M5P', '3G21', '4OFH', '7D6H', 
-           '6HTI', '7URF', '1PH0', '6HYP', '8HUB', '3K31', '3A2S', '3BOI', '2OCA', '3PMV', '4RF2', '7K27', '7GH7', '7L85', '2J8T', 
-           '2NMY', '8WLS', '5Z9P', '1L9S', '5DWI', '2MUM', '3OGV', '1KSL', '1B0Y', '1J82', '7X4U', '4JYG', '1RUH', '6YB1', '5QAF', 
-           '5TEA', '2CCF', '3RGH', '3RMH', '5P7A', '6FE5', '8TYS', '6WF5', '4U58', '2L7U', '6HTA', '1WWF', '7UFA', '6O0A', '1CZ7', 
-           '6RKU', '7EEN', '5DF9', '1Z3A', '1BD4', '5C4Y', '2KRB', '2KJE', '6GCF', '7ASG', '6C33', '4LFB', '5A8F', '5BYJ', '6HK1', 
-           '1IWN', '1RSN', '6AAH', '1NMA', '3K5Y', '3GHD', '2Y5N', '7PB5', '3IEY', '8QRV', '2OMK', '7XUD', '6RHT', '2PS5', '2BCD', 
-           '4V1A', '6MJS', '4GLO', '4OMK', '7AM3', '2VQI', '2KDT', '5UIP', '5HBY', '1K32', '5AME', '2B7P', '2XEB', '5NK4', '1ZQH', 
-           '1NBE', '2YMP', '4O24', '5T9U', '5MMW', '2KF7', '6TJD', '5GR1', '7MHI', '3IP4', '5TX3', '3ZDH', '3A75', '4B89', '6KGT', 
-           '8UP8', '5INQ', '6HP0', '7L67', '8QAB', '2O5Y', '7KRB', '1WT8', '7F12', '8C5L', '3ZEZ', '5WLU', '8QAH', '6H6D', '1P2G', 
-           '3OJJ', '7AJS', '7UEQ', '3C5D', '4J49', '6N27', '8DV7', '5IYQ', '6BMK', '1QJA', '3P2J', '7PRY', '3CI5', '5UOI', '3I2S', 
-           '2HYI', '5FOJ', '1EEP', '8A7L', '1BRY', '8HA2', '1XL1', '1KDC', '1N8K', '3JT5', '5L80', '2EF7', '1F81', '4CUR', '5GIC', 
-           '2AMM', '5YDU', '3QZA', '5US3', '7AS6', '3SJ5', '5CR2', '2FYD', '5TBJ', '8PRE', '6DAJ', '6E18', '3GGV', '7DBI', '1NTP', 
-           '2V05', '3DSN', '5YDE', '7XO1', '5GIT', '5R4K', '3VCE', '3NES', '5K75', '2ZLW', '2XF0', '7LH8', '3W2O', '5QI3', '1AMI', 
-           '4NGI', '7YGD', '8TR2', '7YA7', '8CP0', '1DYT', '8Q10', '6DBW', '7C1E', '1I4Q', '4XTN', '2GIA', '4U9H', '2HFR', '2WUK', 
-           '4CK1', '2QTY', '2Q4T', '3ZIM', '6XFG', '3ERP', '5Q9U', '1P3K', '8I2G', '7DLY', '1FO7', '1NSR', '7O24', '8AI6', '3V97', 
-           '1LX7', '5DOM', '8IH0', '3CQ0']
+           '5C67', '5N8E', '5O8F', '5P8G', '5Q8H', '5R8I', '5S8J', '5T8K', '5U8L', '5V8M', '5Y8P', '5Z8Q', '6A8R', '6B8S', '6D8U', '6E8V', '6F8W', '6G8X', '6H8Y', '6I8Z', '6J90', '6K91', '6L92', '6M93', '6N94', '6O95', '6P96', '6U9B', '6V9C', '6W9D', '6Y9F', '6Z9G', '7B9I', '7D9K', '7E9L', '7G9N', '7K9R', '7L9S', '7M9T', '7N9U', '7P9W', '7R9Y', '7S9Z', '7T10', '7U11', '7V12', '7W13', '7X14', '7Y15', '8A17', '8B18', '8C19', '8E1B', '8F1C', '8H1E', '8I1F', '8K1H', '8P1M', '8Q1N', '8R1O', '8T1Q', '8U1R', '7BJB', '1HAI', '5LOM', '7KE6', '1NQ6', '6SVB', '4MUF', '8D5W', '4INB', '4UAW', '4IQI', '6X0O', '1OUK', '7V3G', '6SST', '8BX6', '8F5M', '2OV4', '7FTT', '4LLH', '7MYA', '6O4G', '1PR5', '2DV7', '3VC0', '8EYI', '7KJ0', '7WF5', '1V61', '3S2E', '1X46', '3PTM', '7SXQ', '1G4C', '6UJN', '4CTX', '4L3P', '7BY5', '6HK4', '8I9E', '1GE5', '1KGW', '6YTZ', '3VR2', '6I1Z', '2LRA', '6RIT', '4KI1', '1M1Q', '5DFP', '2FQL', '1W5Z', '3KUT', '1ZZ3', '1IWZ', '8DFH', '2A87', '3SPZ', '3HNL', '7L7S', '6HVA', '7JGP', '2UVD', '2J3G', '3Q3I', '3V0N', '2EC5', '2O70', '3NYS', '7N7P', '6SVM', '6BRR', '5TQE', '2RS7', '1VLL', '2RT6', '2IED', '1QAJ', '4KMS', '1DJ0', '6OS0', '4Y9Y', '3GAC', '1Z6A', '7MVS', '1P1G', '7FBQ', '2GMS', '2RAT', '1R5B', '6ANU', '1RCJ', '4CJ0', '2UZS', '2RK9', '1PPJ', '3HWX', '6NQY', '6WL6', '1T1Y', '5EPS', '3PXN', '2DP4', '2K2D', '2OYK', '7AEG', '3LJ0', '4AKJ', '8FQH', '4TU7', '6M9S', '4HWB', '5B3K', '1MA7', '6DI6', '8Y6P', '4CT6', '2E09', '1M5X', '1CKF', '8UH9', '4M8Q', '3DCA', '2DVW', '6MBE', '8J78', '5K0R', '5JA3', '4OI1', '8FU4', '8G6Q', '3BH8', '5SD0', '6LN5', '4JDI', '6FU4', '4PI3', '7ZWF', '8IZY', '7DK6', '1D7L', '5YT2', '6INT', '4QSS', '8GFZ', '8C6H', '5K90', '4OFP', '5P6U', '6EOD', '4IQV', '6PTN', '2H16', '4I19', '6WQ9', '5HDH', '5JQX', '193L', '6GW2', '8D4T', '5XB0', '4XF2', '2K51', '3Q6K', '6U7P', '1LQA', '7RZ1', '5D3R', '6EIR', '8VTZ', '8TVZ', '2Q8L', '5T8U', '1N76', '3TGV', '3IY1', '1NP1', '4KP5', '7GU6', '2F9R', '6I04', '2JVG', '3I7H', '1MIY', '3ZS1', '3TKA', '7S0R', '7MK3', '2H4E', '3OQL', '6JTJ', '1ZOR', '6R53', '6IKO', '7P8X', '7B4S', '4PPJ', '8W0D', '8I1D', '1RQA', '4ZJG', '3RPU', '2GVG', '6VD2', '8J5W', '7YJK', '3UHN', '6BDU', '6RFB', '8SHK', '6R0H', '8E6J', '7NGY', '6Y75', '5W2U', '2VOV', '1AA2', '6WOG', '1VGG', '8P22', '3KDS', '5Y51', '1IZL', '8KE8', '1UW1', '2CNF', '4CNU', '1S8I', '2P1Q', '5BP1', '4PJ7', '5WYN', '6P3L', '4MB3', '6M5P', '3G21', '4OFH', '7D6H', '6HTI', '7URF', '1PH0', '6HYP', '8HUB', '3K31', '3A2S', '3BOI', '2OCA', '3PMV', '4RF2', '7K27', '7GH7', '7L85', '2J8T', '2NMY', '8WLS', '5Z9P', '1L9S', '5DWI', '2MUM', '3OGV', '1KSL', '1B0Y', '1J82', '7X4U', '4JYG', '1RUH', '6YB1', '5QAF', '5TEA', '2CCF', '3RGH', '3RMH', '5P7A', '6FE5', '8TYS', '6WF5', '4U58', '2L7U', '6HTA', '1WWF', '7UFA', '6O0A', '1CZ7', '6RKU', '7EEN', '5DF9', '1Z3A', '1BD4', '5C4Y', '2KRB', '2KJE', '6GCF', '7ASG', '6C33', '4LFB', '5A8F', '5BYJ', '6HK1', '1IWN', '1RSN', '6AAH', '1NMA', '3K5Y', '3GHD', '2Y5N', '7PB5', '3IEY', '8QRV', '2OMK', '7XUD', '6RHT', '2PS5', '2BCD', '4V1A', '6MJS', '4GLO', '4OMK', '7AM3', '2VQI', '2KDT', '5UIP', '5HBY', '1K32', '5AME', '2B7P', '2XEB', '5NK4', '1ZQH', '1NBE', '2YMP', '4O24', '5T9U', '5MMW', '2KF7', '6TJD', '5GR1', '7MHI', '3IP4', '5TX3', '3ZDH', '3A75', '4B89', '6KGT', '8UP8', '5INQ', '6HP0', '7L67', '8QAB', '2O5Y', '7KRB', '1WT8', '7F12', '8C5L', '3ZEZ', '5WLU', '8QAH', '6H6D', '1P2G', '3OJJ', '7AJS', '7UEQ', '3C5D', '4J49', '6N27', '8DV7', '5IYQ', '6BMK', '1QJA', '3P2J', '7PRY', '3CI5', '5UOI', '3I2S', '2HYI', '5FOJ', '1EEP', '8A7L', '1BRY', '8HA2', '1XL1', '1KDC', '1N8K', '3JT5', '5L80', '2EF7', '1F81', '4CUR', '5GIC', '2AMM', '5YDU', '3QZA', '5US3', '7AS6', '3SJ5', '5CR2', '2FYD', '5TBJ', '8PRE', '6DAJ', '6E18', '3GGV', '7DBI', '1NTP', '2V05', '3DSN', '5YDE', '7XO1', '5GIT', '5R4K', '3VCE', '3NES', '5K75', '2ZLW', '2XF0', '7LH8', '3W2O', '5QI3', '1AMI', '4NGI', '7YGD', '8TR2', '7YA7', '8CP0', '1DYT', '8Q10', '6DBW', '7C1E', '1I4Q', '4XTN', '2GIA', '4U9H', '2HFR', '2WUK', '4CK1', '2QTY', '2Q4T', '3ZIM', '6XFG', '3ERP', '5Q9U', '1P3K', '8I2G', '7DLY', '1FO7', '1NSR', '7O24', '8AI6', '3V97', '1LX7', '5DOM', '8IH0', '3CQ0', '5ZCA', '2CLR', '5O1F', '4MUN', '4LU6', '3SOW', '5PMK', '6BKF', '3GVD', '2DM1', '4GGL', '3SCY', '1SW2', '1C17', '3HJJ', '1EUR', '5EBX', '1BGV', '2PXW', '3UV0', '6KGE', '2OKK', '4DMU', '6MLM', '4S3J', '3RU5', '1WBV', '6W8L', '8T9N', '1W9C', '6OKJ', '8H8L', '7B1A', '8AKB', '1HRM', '1WC0', '7M75', '3PVF', '3M97', '3ZFF', '7MLK', '3C20', '6RQ1', '7MPW', '2B3P', '5KTT', '4JUO', '4EGN', '1UTU', '1R66', '6Q91', '4JAW', '4R6T', '1Y9E', '1OC6', '4AYX', '7VB6', '3VQ1', '3FU6', '3I4O', '2VKH', '5AC2', '2OBA', '1WMX', '4UGZ', '1P1N', '1P1M', '6FAU', '5C3U', '7AN5', '3ZMF', '7F84', '3QLG', '7CWB', '8Q9K', '2BTC', '4FP7', '3MRQ', '7E49', '6D6H', '2XX8', '5KXI', '8F6P', '8XNG', '5QDV', '8AES', '6IVR', '1HFO', '1EYV', '7LVG', '7BSO', '1V3A', '7AZ1', '5Y7Y', '3S7L', '2HVP', '5WDU', '4TKR', '4K96', '4AEI', '5FI2', '8BEI', '6H1F', '7CMO', '2YOG', '8HY1', '5APH', '2Q0X', '5HMA', '4WHA', '3T26', '8AX8', '8ERF', '8IVS', '7AUX', '1ZVT', '5JG1', '7AME', '1R3F', '8QV4', '3CIC', '2LFJ', '2FAH', '287D', '1AL5', '1IRU', '6N87', '6DZ5', '2ZN8', '7TQU', '7LZW', '2ODC', '1YKF', '1O9Y', '4DJE', '1WAX', '7PEJ', '2KB9', '4GXL', '1ORF', '5HYY', '3FSW', '1CLY', '3FA8', '6O77', '1HJK', '7U04', '7G0I', '7TB9', '4XOW', '5T2Y', '3ASY', '3M5M', '3S46', '1RUO', '4BR9', '3MAJ', '1J16', '6P17', '3OU0', '1K4A', '5PO3', '1DWC', '6OO0', '1EU5', '3OLV', '2ELU', '5THI', '1CRB', '2PHM', '6XYY', '3NZH', '5V8P', '1XXG', '7YEN', '7ZM6', '2IL1', '5JDX', '8FDS', '4RIR', '4C39', '4N16', '5AM6', '3CWU', '2R2O', '5YX1', '4XBU', '6K2T', '6SDT', '3ZQS', '2OIX', '3VHA', '3FLM', '3FW1', '6O6M', '4P0V', '3L0C', '1AA1', '2EQY', '4CFP', '1OL5', '5THT', '2WG6', '1A2T', '3BWB', '4HXL', '2GFT', '3W5C', '8G2L', '2V9B', '4JM8', '1S5S', '7X85', '8GVF', '6HK8', '1KZL', '2XGN', '6Z41', '1R30', '7R5F', '2IXV', '2WAE', '4X9W', '2NWL', '1RBP', '3T0S', '2BXK', '4OEX', '4KRD', '5C1B', '7U9P', '4BDX', '2PLV', '2HTD', '4IR7', '8ICQ', '6W9A', '4I3L', '4EJ0', '8D3A', '7R7T', '5KWY', '7JQR', '3OQT', '2O7H', '8BYJ', '4XT7', '4UEG', '1NN2', '5Y9B', '6Z8Y', '5PKB', '1OUC', '8J2J', '7XIX', '8EV5', '7CJL', '5M4X', '8THM', '1B22', '4N90', '1Q0Q', '4GSL', '4NU5', '1KT2', '7P5Y', '7COH', '7LM7', '7UY2', '1FGD', '1QD0', '1TY4', '6OPJ', '2VXM', '4NZ8', '6CWS', '8EBB', '1W33', '7PK1', '1YLE', '8H1W', '4XSZ', '1GZF', '8C31', '4REC', '7ONB', '1Y1B', '1GAY', '5VO5', '1ROF', '2C9W', '6L0V', '3RCW', '4HWV', '5Z9F', '3GBO', '2I15', '5C31', '3JSS', '6XK9', '1EHN', '3M9X', '5JNQ', '3FY3', '5J85', '4I3V', '4MQG', '5SSI', '6UIE', '1TBT', '1MN8', '6Z2F', '8XD3', '1XCU', '3OF6', '6MP8', '7E1A', '3EMR', '7QL1', '3EU4', '2LML', '5DJ0', '3ZKE', '3WW4', '6YE1', '8WR8', '7T55', '3JSU', '3QZU', '7S9A', '6DN2', '7SIL', '3CDH', '1UJ8', '2IEE', '8K8E', '7PY3', '6RWA', '4HUK', '6PGJ', '4K3A', '2N8X', '7SNX', '5SL6', '7QSP', '7TPD', '2BN6', '5W22', '1UBP', '5ERP', '1IUH', '1ICI', '1KM0', '7DTS', '4V3Q', '5F5S', '2N0B', '8G0Q', '6YYC', '4MSP', '1HJ3', '2ZSZ', '1OIS', '6SFC', '1O15', '6TBH', '5JSA', '3VMI', '5IGX', '5LEE', '3KLA', '8UOP', '3SYW', '1YZA', '4X68', '6HXL', '6MM9', '7W6Q', '3SUS', '1MUY', '1Q2Y', '2GRP', '1MOH', '3PML', '1ESX', '4E7V', '8I7X', '2R1U', '2VCA', '3D46', '7YFO', '1Z0P', '1V1A', '8KAK', '8SEI', '5NNL', '4XOS', '4USM', '3ID7', '4TPG', '4FLR', '7WQZ', '4LL8', '6WE3', '1G0D', '3NCA', '6KJE', '1W9A', '6KHM', '4GHT', '3GRU', '8OPS', '3TIF', '3OQF', '8OEA', '5V5N', '6H06', '2P7O', '6KOF', '7X1U', '4MV6', '1UV6', '8OPV', '4Q7H', '2C6X', '7UN4', '3NA5', '8JKO', '6SFR', '8DIP', '4BB3', '1HDN', '1N8P', '6YSL', '1ZHX', '7Y6F', '3GA5', '6NHS', '2HH6', '7LQY', '6P5D', '2EZH', '3B2H', '8UW3', '4FJ6', '7F1O', '3ZUA', '4E2V', '4HJH', '5NUE', '8WY5', '4Y64', '1LMO', '1ZOA', '4UCW', '4R8D', '1Y84', '5OZ6', '2EJF', '6F0G', '5LAD', '4LJD', '5COP', '4RUZ', '4KGV', '5MR1', '4HUJ', '8GW1', '4HZV', '1H7J', '3FO4', '3QXM', '7YS5', '5JQ8', '3MNB', '6DWZ', '1CPG', '7PH1', '8F45', '7PU8', '6ALL', '5PRK', '3B1N', '8PA9', '7FM6', '7AIT', '3SPX', '1H9G', '1LL3', '4FWF', '3T33', '2OYL', '7YU8', '3K08', '1MTQ', '5JHY', '1U6C', '1IED', '6BO3', '3TTP', '4PZA', '3T15', '5H3C', '4G4O', '5MXA', '3MFK', '2ZOT', '3EE7', '2XJ1', '7XHD', '2GSY', '6KCK', '4YSA', '4OOP', '2F8C', '3NRQ', '4R36', '2LCW', '7OGG', '2XE1', '5O7E', '4R5S', '7MWA', '6UY3', '6CE0', '6MO7', '8FM0', '3G35', '4B5F', '4DD7', '1JF0', '5KI6', '9EY6', '1H2Y', '1LLN', '3QKA', '6EED', '4M1F', '1XH4', '8U26', '2DNT', '5CCP', '2BZB', '6EOB', '7VFD']
+
+
+
 
 # # Test for duplicates
 def duplicates(pdb):
@@ -101,7 +71,7 @@ def remove_invalid(pdb, e_list):
             tmp.append(id)
     print(tmp)
 
-# remove_invalid(pdb_ids, ['8ATU'])
+# remove_invalid(pdb_ids, ['8BTK'])
 # count_list(pdb_ids)
 # duplicates(pdb_ids)
 
@@ -393,7 +363,7 @@ def preprocess_structures(structure, max_length=700):
 # test_preprocess_and_decode()
 
 # ------------------------------------------------------------------------------------------------------------------------------------
-# change max length to 450, 500
+# change max length to 300, 350. But for now 400 is fine.
 # Function to build the dataset
 def build_dataset(pdb_ids, pdb_dir='pdb_files', max_length=400):
     X, y = [], []
@@ -432,7 +402,11 @@ def analyze_sequence_lengths(pdb_ids, pdb_dir='pdb_files'):
     for pdb_id in pdb_ids:
         try:
             file_path = os.path.join(pdb_dir, f'pdb{pdb_id.lower()}.ent')
-            sequences, _ = parse_pdb_multiple_chains(file_path)
+            result = parse_pdb_multiple_chains(file_path)
+            # If parse_pdb_multiple_chains returns more than two values, 
+            # you can unpack them like this
+            sequences = result[0]
+
             for chain_id in sequences:
                 lengths.append(len(sequences[chain_id]))
         except Exception as e:
@@ -461,24 +435,23 @@ model = Sequential()
 model.add(Input(shape=(sequence_length, num_features)))
 
 # CNN layers
-model.add(Conv1D(filters=32, kernel_size=3, activation='relu', padding='same'))
+model.add(Conv1D(filters=64, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
 model.add(MaxPooling1D(pool_size=1))
-model.add(Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'))
+model.add(Conv1D(filters=128, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
 model.add(MaxPooling1D(pool_size=1))
 model.add(BatchNormalization())
 
 # LSTM layers
-model.add(LSTM(100, return_sequences=True))  # return_sequences=True if stacking LSTMs
-model.add(Dropout(0.5))
-model.add(LSTM(100, return_sequences=True))  # Ensure it returns sequences
+model.add(LSTM(128, return_sequences=True, dropout=0.6))  # Increased dropout
+model.add(LSTM(128, return_sequences=True, dropout=0.6))  # Increased dropout
 
 # Dense layers for classification
-model.add(TimeDistributed(Dense(32, activation='relu')))  # TimeDistributed to apply Dense layer to each time step
-model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(num_classes, activation='softmax')))  # Use softmax for multi-class classification and TimeDistributed for final output
+model.add(TimeDistributed(Dense(64, activation='relu', kernel_regularizer=l2(0.002))))  # TimeDistributed to apply Dense layer to each time step
+model.add(Dropout(0.6))
+model.add(TimeDistributed(Dense(num_classes, activation='softmax', kernel_regularizer=l2(0.002))))  # Use softmax for multi-class classification and TimeDistributed for final output
 
 # Compile the model
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.compile(optimizer=Adam(learning_rate=0.00025), loss='categorical_crossentropy', metrics=['accuracy'])
 
 # Summary of the model
 model.summary()
@@ -495,10 +468,13 @@ y_train, y_val = y[:split_index], y[split_index:]
 checkpoint = ModelCheckpoint('best_model.keras', monitor='val_accuracy', save_best_only=True, mode='max')
 
 # Add early stopping to prevent overfitting
-early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+# Implement learning rate scheduling
+lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, min_lr=1e-6, verbose=1)
 
 # Train the model
-history = model.fit(X_train, y_train, epochs=30, batch_size=32, validation_data=(X_val, y_val), callbacks=[checkpoint, early_stopping])
+history = model.fit(X_train, y_train, epochs=50, batch_size=64, validation_data=(X_val, y_val), callbacks=[checkpoint, early_stopping, lr_scheduler])
 
 # Evaluate the model on the validation set
 loss, accuracy = model.evaluate(X_val, y_val)
