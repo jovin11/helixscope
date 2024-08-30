@@ -239,7 +239,7 @@ def parse_pdb_multiple_chains(file_path):
 # # Test the function
 
 # Test and study discrepency files here 
-# sequences, secondary_structures, discrepency_list = parse_pdb_multiple_chains("pdb_files/pdb1lx7.ent")
+# sequences, secondary_structures, discrepency_list = parse_pdb_multiple_chains("pdb_files/pdb1t8w.ent")
 # print(sequences)
 # print(secondary_structures)
 # print(discrepency_list)
@@ -332,14 +332,14 @@ def preprocess_structures(structure, max_length=700):
 # struct = 'HHHCCEECHEHCHCCCC'
 # print(preprocess_structures(struct, 17))
 
-# # Function to decode the encoded secondary structures back to the string representation
-# def decode_structures(encoding):
-#     index_to_structure = {0: 'H', 1: 'E', 2: 'C'}
-#     structure = []
-#     for row in encoding:
-#         index = np.argmax(row)
-#         structure.append(index_to_structure.get(index, 'C'))
-#     return ''.join(structure)
+# Function to decode the encoded secondary structures back to the string representation
+def decode_structures(encoding):
+    index_to_structure = {0: 'H', 1: 'E', 2: 'C'}
+    structure = []
+    for row in encoding:
+        index = np.argmax(row)
+        structure.append(index_to_structure.get(index, 'C'))
+    return ''.join(structure)
 
 # # Test the encoding and decoding process
 # def test_preprocess_and_decode():
@@ -394,14 +394,14 @@ def build_dataset(pdb_ids, pdb_dir='pdb_files', max_length=400):
             error_list.append(pdb_id)
     return np.array(X), np.array(y), error_list, decrepency_list
 
-# Build the dataset
-X, y, error_list, decrepency_list = build_dataset(pdb_ids)
-# print(error_list)
-# print(decrepency_list)
-print(f'Dataset shape: X={X.shape}, y={y.shape}')
-sequence_length = X.shape[1]
-num_features = X.shape[2]
-num_classes = y.shape[2]
+# # Build the dataset
+# X, y, error_list, decrepency_list = build_dataset(pdb_ids)
+# # print(error_list)
+# # print(decrepency_list)
+# print(f'Dataset shape: X={X.shape}, y={y.shape}')
+# sequence_length = X.shape[1]
+# num_features = X.shape[2]
+# num_classes = y.shape[2]
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------
@@ -474,113 +474,113 @@ def analyze_sequence_lengths(pdb_ids, pdb_dir='pdb_files'):
 # ------------------------------------------------------------------------------------------------------------------------------------
 
 
-# CNN-LSTM hybrid model
+# # CNN-LSTM hybrid model
 
-# Updated Model Architecture
-model = Sequential()
+# # Updated Model Architecture
+# model = Sequential()
 
-# Input layer
-model.add(Input(shape=(sequence_length, num_features)))
+# # Input layer
+# model.add(Input(shape=(sequence_length, num_features)))
 
-# CNN layers
-model.add(Conv1D(filters=64, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
-model.add(MaxPooling1D(pool_size=1))
-model.add(Dropout(0.2))  # Add Dropout
+# # CNN layers
+# model.add(Conv1D(filters=64, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
+# model.add(MaxPooling1D(pool_size=1))
+# model.add(Dropout(0.2))  # Add Dropout
 
-model.add(Conv1D(filters=128, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
-model.add(MaxPooling1D(pool_size=1))
-model.add(Dropout(0.2))  # Add Dropout
+# model.add(Conv1D(filters=128, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
+# model.add(MaxPooling1D(pool_size=1))
+# model.add(Dropout(0.2))  # Add Dropout
 
-model.add(Conv1D(filters=128, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
-model.add(MaxPooling1D(pool_size=1))
-model.add(Dropout(0.2))  # Add Dropout
+# model.add(Conv1D(filters=128, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
+# model.add(MaxPooling1D(pool_size=1))
+# model.add(Dropout(0.2))  # Add Dropout
 
-model.add(Conv1D(filters=256, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
-model.add(MaxPooling1D(pool_size=1))
-model.add(Dropout(0.2))  # Add Dropout
-model.add(BatchNormalization())
+# model.add(Conv1D(filters=256, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(0.002)))
+# model.add(MaxPooling1D(pool_size=1))
+# model.add(Dropout(0.2))  # Add Dropout
+# model.add(BatchNormalization())
 
-# LSTM layers
-model.add(LSTM(128, return_sequences=True, dropout=0.4)) 
-model.add(LSTM(128, return_sequences=True, dropout=0.4))
-model.add(LSTM(128, return_sequences=True, dropout=0.4))
+# # LSTM layers
+# model.add(LSTM(128, return_sequences=True, dropout=0.4)) 
+# model.add(LSTM(128, return_sequences=True, dropout=0.4))
+# model.add(LSTM(128, return_sequences=True, dropout=0.4))
 
-# Dense layers for classification
-model.add(TimeDistributed(Dense(64, activation='relu', kernel_regularizer=l2(0.002))))  # TimeDistributed to apply Dense layer to each time step
-model.add(Dropout(0.6))
-model.add(TimeDistributed(Dense(num_classes, activation='softmax', kernel_regularizer=l2(0.002))))  # Use softmax for multi-class classification and TimeDistributed for final output
+# # Dense layers for classification
+# model.add(TimeDistributed(Dense(64, activation='relu', kernel_regularizer=l2(0.002))))  # TimeDistributed to apply Dense layer to each time step
+# model.add(Dropout(0.6))
+# model.add(TimeDistributed(Dense(num_classes, activation='softmax', kernel_regularizer=l2(0.002))))  # Use softmax for multi-class classification and TimeDistributed for final output
 
-# Compile the model
-model.compile(optimizer=Adam(learning_rate=0.00015), loss='categorical_crossentropy', metrics=['accuracy'])
+# # Compile the model
+# model.compile(optimizer=Adam(learning_rate=0.00015), loss='categorical_crossentropy', metrics=['accuracy'])
 
-# Summary of the model
-model.summary()
+# # Summary of the model
+# model.summary()
 
 
-# ------------------------------------------------------------------------------------------------------------------------------------
+# # ------------------------------------------------------------------------------------------------------------------------------------
 
-# Split the data into training and validation sets
-split_index = int(0.8 * len(X))
-X_train, X_val = X[:split_index], X[split_index:]
-y_train, y_val = y[:split_index], y[split_index:]
+# # Split the data into training and validation sets
+# split_index = int(0.8 * len(X))
+# X_train, X_val = X[:split_index], X[split_index:]
+# y_train, y_val = y[:split_index], y[split_index:]
 
-# Add model checkpoint to save the best model in Keras format
-checkpoint = ModelCheckpoint('best_model_v2.keras', monitor='val_accuracy', save_best_only=True, mode='max')
+# # Add model checkpoint to save the best model in Keras format
+# checkpoint = ModelCheckpoint('best_model_v2.keras', monitor='val_accuracy', save_best_only=True, mode='max')
 
-# Add early stopping to prevent overfitting
-early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+# # Add early stopping to prevent overfitting
+# early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
-# Implement learning rate scheduling
-lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, min_lr=1e-6, verbose=1)
+# # Implement learning rate scheduling
+# lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, min_lr=1e-6, verbose=1)
 
-# Train the model
-history = model.fit(X_train, y_train, epochs=50, batch_size=64, validation_data=(X_val, y_val), callbacks=[checkpoint, early_stopping, lr_scheduler])
+# # Train the model
+# history = model.fit(X_train, y_train, epochs=50, batch_size=64, validation_data=(X_val, y_val), callbacks=[checkpoint, early_stopping, lr_scheduler])
 
-# Evaluate the model on the validation set
-loss, accuracy = model.evaluate(X_val, y_val)
-print(f'Validation Loss: {loss}')
-print(f'Validation Accuracy: {accuracy}')
+# # Evaluate the model on the validation set
+# loss, accuracy = model.evaluate(X_val, y_val)
+# print(f'Validation Loss: {loss}')
+# print(f'Validation Accuracy: {accuracy}')
 
-# Create a figure with 3 subplots
-plt.figure(figsize=(18, 6))
+# # Create a figure with 3 subplots
+# plt.figure(figsize=(18, 6))
 
-# Subplot 1: Accuracy
-plt.subplot(1, 3, 1)
-plt.plot(history.history['accuracy'], label='Training Accuracy')
-plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
-plt.xlabel('Epoch')
-plt.ylabel('Accuracy')
-plt.legend(loc='lower right')
-plt.title('Training and Validation Accuracy')
+# # Subplot 1: Accuracy
+# plt.subplot(1, 3, 1)
+# plt.plot(history.history['accuracy'], label='Training Accuracy')
+# plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+# plt.xlabel('Epoch')
+# plt.ylabel('Accuracy')
+# plt.legend(loc='lower right')
+# plt.title('Training and Validation Accuracy')
 
-# Subplot 2: Loss
-plt.subplot(1, 3, 2)
-plt.plot(history.history['loss'], label='Training Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.legend(loc='upper right')
-plt.title('Training and Validation Loss')
+# # Subplot 2: Loss
+# plt.subplot(1, 3, 2)
+# plt.plot(history.history['loss'], label='Training Loss')
+# plt.plot(history.history['val_loss'], label='Validation Loss')
+# plt.xlabel('Epoch')
+# plt.ylabel('Loss')
+# plt.legend(loc='upper right')
+# plt.title('Training and Validation Loss')
 
-# Subplot 3: Error Rate (1 - Accuracy)
-plt.subplot(1, 3, 3)
-plt.plot(1 - np.array(history.history['accuracy']), label='Training Error')
-plt.plot(1 - np.array(history.history['val_accuracy']), label='Validation Error')
-plt.xlabel('Epoch')
-plt.ylabel('Error Rate')
-plt.legend(loc='upper right')
-plt.title('Training and Validation Error Rate')
+# # Subplot 3: Error Rate (1 - Accuracy)
+# plt.subplot(1, 3, 3)
+# plt.plot(1 - np.array(history.history['accuracy']), label='Training Error')
+# plt.plot(1 - np.array(history.history['val_accuracy']), label='Validation Error')
+# plt.xlabel('Epoch')
+# plt.ylabel('Error Rate')
+# plt.legend(loc='upper right')
+# plt.title('Training and Validation Error Rate')
 
-# Adjust layout to prevent overlap
-plt.tight_layout()
+# # Adjust layout to prevent overlap
+# plt.tight_layout()
 
-# Display the combined plot
-plt.show()
+# # Display the combined plot
+# plt.show()
 
-# Load the saved model from the file
-loaded_model = load_model('best_model_v2.keras') # latest model here
+# # Load the saved model from the file
+# loaded_model = load_model('best_model_v2.keras') # latest model here
 
-# loaded_model = load_model('best_model.keras') # the 73% accuracy model i believe is saved here
+# # loaded_model = load_model('best_model.keras') # the 73% accuracy model i believe is saved here
 
 # ------------------------------------------------------------------------------------------------------------------------------------
 

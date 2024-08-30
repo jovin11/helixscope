@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>PSSP</title>
+    <script src="pssp.js"></script>
+</head>
+<body>
+    <h1>Protein Secondary Structure Predictor</h1>
+    <p>This project is a web application for predicting the secondary structure of proteins from their amino acid sequences.</p>
+
+    <h2>Features</h2>
+    <p>Secondary Structure Prediction: Predicts alpha-helices, beta-sheets, and coils from amino acid sequences.</p>
+    <p>Web Interface: Simple web interface for inputting protein sequences and viewing predictions.</p>
+
+    <h2>Predict Secondary Structure</h2>
+    <form id="predictionForm">
+        <label for="sequenceInput">Amino Acid Sequence:</label><br>
+        <textarea id="sequenceInput" rows="4" cols="50"></textarea><br><br>
+        <button type="button" onclick="makePrediction()">Predict</button>
+    </form>
+
+    <h2>Prediction Result</h2>
+    <p id="predictionResult">Your prediction will appear here.</p>
+</body>
+</html>
+
+
