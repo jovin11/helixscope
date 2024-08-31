@@ -1,5 +1,6 @@
 
 function makePrediction() {
+    console.log("Predict button clicked"); // Add this line
     const sequence = document.getElementById('sequenceInput').value;
 
     fetch('/predict', {

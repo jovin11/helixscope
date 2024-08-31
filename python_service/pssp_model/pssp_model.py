@@ -239,7 +239,7 @@ def parse_pdb_multiple_chains(file_path):
 # # Test the function
 
 # Test and study discrepency files here 
-# sequences, secondary_structures, discrepency_list = parse_pdb_multiple_chains("pdb_files/pdb1t8w.ent")
+# sequences, secondary_structures, discrepency_list = parse_pdb_multiple_chains("pdb_files/pdb1a8m.ent")
 # print(sequences)
 # print(secondary_structures)
 # print(discrepency_list)

@@ -3,7 +3,18 @@
 <html>
 <head>
     <title>PSSP</title>
-    <script src="pssp.js"></script>
+    <style>
+        #predictionResult {
+            white-space: pre-wrap; /* Allows line breaks in the prediction result */
+            word-wrap: break-word; /* Ensures long words or lines break to fit within the container */
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 200px; /* Limits the height of the prediction box */
+            overflow-y: auto; /* Adds a scrollbar if the content exceeds the max height */
+            background-color: #f4f4f4; /* Optional: Adds a background color to the output box */
+        }
+    </style>
 </head>
 <body>
     <h1>Protein Secondary Structure Predictor</h1>
@@ -18,10 +29,42 @@
         <label for="sequenceInput">Amino Acid Sequence:</label><br>
         <textarea id="sequenceInput" rows="4" cols="50"></textarea><br><br>
         <button type="button" onclick="makePrediction()">Predict</button>
+        <button type="button" onclick="clearPrediction()">Clear</button>
     </form>
 
     <h2>Prediction Result</h2>
-    <p id="predictionResult">Your prediction will appear here.</p>
+    <pre id="predictionResult">Your prediction will appear here.</pre>
+
+    <!-- Inline JavaScript -->
+    <script>
+        function makePrediction() {
+            const sequence = document.getElementById('sequenceInput').value;
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    input_data: sequence  // Send as a single string
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Format the prediction by adding line breaks after each character
+                document.getElementById('predictionResult').innerText = `Prediction:\n${data.prediction}`;
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                document.getElementById('predictionResult').innerText = `Error: Could not get prediction.`;
+            });
+        }
+
+        function clearPrediction() {
+            // Clear the prediction result
+            document.getElementById('predictionResult').innerText = 'Your prediction will appear here.';
+        }
+    </script>
 </body>
 </html>
 
