@@ -21,6 +21,7 @@ model = load_model(os.path.join(current_dir, '../best_model_v2.keras'))
 def home():
     return render_template('pssp.html')
 
+
 @app.route('/predict', methods=['POST'])
 def predict():
     input_data = request.json['input_data']
@@ -35,18 +36,9 @@ def predict():
         
         # Make predictions using the model
         prediction = model.predict(processed_input)
-
-        # Trim the prediction to match the input sequence length
-        trimmed_prediction = prediction[0][:len(input_data)]
-
-        # # Debugging: Print input length and prediction shape
-        # print(f"Input length: {len(input_data)}, Prediction shape: {prediction.shape}")
         
         # Decode the predicted output back to the secondary structure string
-        decoded_prediction = decode_structures(trimmed_prediction)
-
-        # # Debugging: Print the decoded prediction length
-        # print(f"Decoded prediction length: {len(decoded_prediction)}")
+        decoded_prediction = decode_structures(prediction[0])
         
         # Return the decoded prediction as a JSON response
         return jsonify({'prediction': decoded_prediction})
