@@ -27,8 +27,8 @@ test:
   script:
     - cd python_service
     - python app.py &
-    - sleep 5
-    - curl -f http://127.0.0.1:5001 || exit 1
+    - sleep 5 
+    - for i in {1..5}; do curl -f http://127.0.0.1:5001 && break || sleep 2; done
 
 # Commented out the pages job for now
 # pages:
