@@ -125,28 +125,34 @@ def download_pdb(pdb_id, pdb_dir='pdb_files'):
 #     }
 #     return three_to_one_dict.get(three_letter_code, 'X')  # 'X' for unknown residues
 
-def parse_sequences(file_path):
+def parse_sequences(file_path, flag):
     sequences = {}
     residue_to_index = {}
     chain_start_residues = {}
     chain_end_residues = {}
     modres_mapping = {}
     seqadv_residues = {}
+    seqadv_deletions = {}
 
     amino_acids = {
             'ALA', 'CYS', 'ASP', 'GLU', 'PHE',
             'GLY', 'HIS', 'ILE', 'LYS', 'LEU',
             'MET', 'ASN', 'PRO', 'GLN', 'ARG',
             'SER', 'THR', 'VAL', 'TRP', 'TYR',
-            'MSE'  # Treat MSE as a valid amino acid equivalent to MET
+            # Non-standard amino acids
+            'MSE', 'PCA', '9FB', 'ACE'
     }
 
     # The decrepency list is used to store the file path of the PDB file that has a discrepancy between the HELIX/SHEET records and the SEQRES records i believe. 
     # And is necessary for build_dataset function to get all datasets with decrepency.
-    # discrepency_list = [] # Will return empty if a file has no discrepancy
+    # discrepancy_list = [] # Will return empty if a file has no discrepancy
 
     def three_to_one(residue):
         try:
+            if residue == 'PCA':
+                return 'Q'
+            if residue == '9FB':
+                return 'P'
             return seq1(residue)
         except:
             return 'X'
@@ -170,39 +176,69 @@ def parse_sequences(file_path):
         new_dict = {}
         temp = 0
         temp_list = []
-        # inserted = False
-        # There is no error check for the case where the seqadv_dict is empty
+
         for chain_id, seqadv_list in seqadv_dict.items():
+            if new_dict.get(chain_id) == None:
+                new_dict[chain_id] = {}
             temp = len(seqadv_list)
             temp_list = seqadv_list
             residue_list = []
             index_list = []
+            count = 0
+
             for residue, index in dict[chain_id].items():
-                if temp_list != [] and  temp_list[0] > residue:
-                    if new_dict.get(chain_id) == None:
-                        new_dict[chain_id] = {}
-                    new_dict[chain_id][residue] = index
+                first_residue = residue
+                break
+
+            flag = False
+            if temp_list[0] < first_residue:
+                flag = True
+            
+            for residue, index in dict[chain_id].items():
+                if temp_list == [] or (residue_list != [] and temp_list[0] > residue_list[-1]):
+                    if residue_list != []:
+                        for i in index_list:
+                            if flag:
+                                new_dict[chain_id][residue_list[0]] = index + i
+                            else:
+                                new_dict[chain_id][residue_list[0]] = i + temp
+                            residue_list.pop(0)
+                        if flag:
+                            new_dict[chain_id][residue] = index + i + 1
+                        else:
+                            new_dict[chain_id][residue] = index + temp
+                        count = i + 1
+                    else:
+                        if flag:
+                            new_dict[chain_id][residue] = index + count
+                        else:
+                            new_dict[chain_id][residue] = index + temp
+
+                elif temp_list != [] and temp_list[0] > residue:
+                    if flag:
+                        new_dict[chain_id][residue] = index + count
+                    else:
+                        new_dict[chain_id][residue] = index
+
                 elif temp_list != [] and temp_list[0] < residue:
-                    if new_dict.get(chain_id) == None:
-                        new_dict[chain_id] = {}
-                    new_dict[chain_id][temp_list[0]] = index
+                    if flag:
+                        new_dict[chain_id][temp_list[0]] = index + count
+                    else:
+                        new_dict[chain_id][temp_list[0]] = index
                     temp_list.pop(0)
-                    # inserted = True
                     residue_list.append(residue)
                     index_list.append(index)
-                    # new_dict[chain_id][residue] = index + temp
-                else:
-                    if residue_list != []:
-                        for index in index_list:
-                            new_dict[chain_id][residue_list[0]] = index + temp
-                            residue_list.pop(0)
-                        new_dict[chain_id][residue] = index + temp + 1
-                    else:
-                        new_dict[chain_id][residue] = index + temp
 
-                        
+            if temp_list != []:
+                for residue in temp_list:
+                    index += 1
+                    new_dict[chain_id][residue] = index + count
+                temp_list = []
+                    
+        for chain_id, residue_dict in dict.items():
+            if chain_id not in new_dict:
+                new_dict[chain_id] = residue_dict
 
-        
         return new_dict
                 
 
@@ -214,9 +250,27 @@ def parse_sequences(file_path):
                 for i in range(len(start_res_dict[chain_id])):
                     if start_res_dict[chain_id][i] <= residue <= end_res_dict[chain_id][i]:
                         return True     
-        return False           
-                
+        return False  
 
+    def handle_deletions(seqadv_deletions, residue_to_index):
+        new_dict = {}
+        for chain_id, deletion_list in seqadv_deletions.items():
+            for residue in deletion_list:
+                residue_to_index[chain_id].pop(residue, None)
+        
+        return residue_to_index
+    
+    def update_dict_indices_after_deletions(residue_to_index):
+        new_dict = {}
+        count = 0
+        for chain_id, residue_dict in residue_to_index.items():
+            count = 0
+            new_dict[chain_id] = {}
+            for residue_index, index in sorted(residue_dict.items()): 
+                new_dict[chain_id][residue_index] = count
+                count += 1
+        return new_dict
+       
 
     # def aggregate_dict(start_residue, ):
 
@@ -228,8 +282,12 @@ def parse_sequences(file_path):
                 # The DBREF has the start and end residue numbers for each chain, which is for mapping the residue numbers to the sequence indices
                 if line.startswith('DBREF'):
                     chain_id = line[12]
-                    start_residue = int(line[14:18].strip())
-                    end_residue = int(line[20:24].strip())
+                    if flag == False:
+                        start_residue = int(line[55:61].strip())
+                        end_residue = int(line[62:68].strip())
+                    else:
+                        start_residue = int(line[14:18].strip())
+                        end_residue = int(line[20:24].strip())
                     if chain_id in chain_start_residues:
                         chain_start_residues[chain_id].append(start_residue)
                         chain_end_residues[chain_id].append(end_residue)
@@ -239,11 +297,23 @@ def parse_sequences(file_path):
                 # The SEQADV has extra residues that are not in the SEQRES records
                 elif line.startswith('SEQADV'):
                     chain_id = line[16]
-                    seqadv_residue = int(line[18:22].strip())
-                    # Track the smallest start residue for each chain considering SEQADV
-                    if chain_id not in seqadv_residues:
-                        seqadv_residues[chain_id] = []
-                    seqadv_residues[chain_id].append(seqadv_residue)
+                    seqadv_deletion = line[49:70].strip()  # Extract the type of SEQADV (e.g., DELETION, CONFLICT, etc.)
+
+                    # Skip lines with ENGINEERED MUTATION or CONFLICT
+                    if seqadv_deletion == 'ENGINEERED MUTATION' or seqadv_deletion == 'CONFLICT':
+                        continue
+
+                    if seqadv_deletion == 'DELETION':
+                        seqadv_deletion_residue = int(line[44:49].strip()) # For deletion cases, use 44:49 for residue number
+                        if chain_id not in seqadv_deletions:
+                            seqadv_deletions[chain_id] = []
+                        seqadv_deletions[chain_id].append(seqadv_deletion_residue)
+                    else:
+                        # Handle non-deletion SEQADV (e.g., insertions or modifications)
+                        seqadv_residue = int(line[18:22].strip())  # For non-deletion cases, use 18:22 for residue number
+                        if chain_id not in seqadv_residues:
+                            seqadv_residues[chain_id] = []
+                        seqadv_residues[chain_id].append(seqadv_residue)
                 
                 # # The MODRES has the mapping of modified residues to the original residues
                 elif line.startswith('MODRES'):
@@ -251,15 +321,14 @@ def parse_sequences(file_path):
                     original_residue = line[24:27].strip()
                     modres_mapping[modres] = original_residue
             except ValueError as e:
+                # print(f"ValueError occurred while processing line: {line}")
                 pass
                 
-
-        # this changes the start_residue to the smallest residue number in the SEQADV records, but there are exceptions with this case.
-        # # Adjust the start_residue based on SEQADV information
-        # for chain_id, start_residue in chain_start_residues.items():
-        #     for 
-        #     if chain_id in seqadv_residues and seqadv_residues[chain_id] < start_residue:
-        #         chain_start_residues[chain_id] = seqadv_residues[chain_id]
+        # print(f"Chain start residues: {chain_start_residues}")
+        # print(f"Chain end residues: {chain_end_residues}")
+        # print(f"SEQADV residues: {seqadv_residues}")
+        # print(f"SEQADV deletions: {seqadv_deletions}")
+        # print(f"MODRES mapping: {modres_mapping}")
 
         file.seek(0)  # Reset file pointer to the beginning
         for line in file:
@@ -270,8 +339,14 @@ def parse_sequences(file_path):
                     residue_to_index[chain_id] = {}
                 parts = line.split()
                 residues = parts[4:]
+
+                # Check if there are no residues in the chain and skip processing if empty
+                if len(residues) == 0:
+                    continue
+
                 if is_nucleotide_sequence(residues):
                     residues = [three_to_one(res) for res in residues]
+
                 elif has_modres_residue(residues):
                     temp = []
                     for res in residues:
@@ -295,14 +370,11 @@ def parse_sequences(file_path):
                             seq_position += 1
                     
                 # print(f"SEQRES: chain={chain_id}, residues={residues}")
+    
                 sequences[chain_id].extend(residues)
 
-    # temp = sequences
-    # for chain_id in temp:
-    #         if temp[chain_id] != []:
-    #             temp[chain_id] = ''.join(temp[chain_id])
-    # print(temp)
-    
+    # print(residue_to_index['A'])
+
     chains_to_remove = []
     for chain_id in sequences:
         if sequences[chain_id] == []:
@@ -311,11 +383,21 @@ def parse_sequences(file_path):
     for chain_id in chains_to_remove:
         del sequences[chain_id]
 
-    if seqadv_residues != {} and not is_in_range(seqadv_residues, chain_start_residues, chain_end_residues):
+    # temp = sequences
+    # for chain_id in temp:
+    #     if temp[chain_id] != []:
+    #         temp[chain_id] = ''.join(temp[chain_id])
+    # print(temp)
+
+
+    if seqadv_residues != {} and not is_in_range(seqadv_residues, chain_start_residues, chain_end_residues) and sequences != {}:
         residue_to_index = update_dict(seqadv_residues, residue_to_index)
-    # print(f"Residue to index mapping for chain {'A'}: {residue_to_index['A']}")
-    
-    # print(modres_mapping)
+
+    if seqadv_deletions != {} and sequences != {}:
+        residue_to_index = handle_deletions(seqadv_deletions, residue_to_index)
+        residue_to_index = update_dict_indices_after_deletions(residue_to_index)
+
+    # print(residue_to_index['A'])
                 
     return sequences, residue_to_index, chain_start_residues, chain_end_residues, seqadv_residues
 
@@ -326,7 +408,7 @@ def map_secondary_structure(file_path, sequences, residue_to_index):
 
     # The decrepency list is used to store the file path of the PDB file that has a discrepancy between the HELIX/SHEET records and the SEQRES records i believe. 
     # And is necessary for build_dataset function to get all datasets with decrepency.
-    discrepency_list = [] # Will return empty if a file has no discrepancy
+    discrepancy_list = [] # Will return empty if a file has no discrepancy
 
     def initialize_secondary_structure(chain_id, length):
         secondary_structures[chain_id] = ['C'] * length
@@ -357,44 +439,41 @@ def map_secondary_structure(file_path, sequences, residue_to_index):
                     # print(f"Residue to index mapping for chain {chain_id}: {residue_to_index[chain_id]}")
 
                     # Update secondary structure
-                    for residue_num in range(start_residue, end_residue + 1):
-                        if residue_num in residue_to_index[chain_id]:
-                                index = residue_to_index[chain_id][residue_num]
-                                secondary_structures[chain_id][index] = sec_type
-                            # print(f"Updating index {index} for chain {chain_id} to {sec_type}")
-                        else:
-                            # print(f"Residue number {residue_num} not found in mapping for chain {chain_id}")
-                            if file_path not in discrepency_list:
-                                discrepency_list.append(file_path) 
+                    try:
+                        for residue_num in range(start_residue, end_residue + 1):
+                                if residue_num in residue_to_index[chain_id]:
+                                    index = residue_to_index[chain_id][residue_num]
+                                    secondary_structures[chain_id][index] = sec_type
+                                # print(f"Updating index {index} for chain {chain_id} to {sec_type}")
+                                else:
+                                    # print(f"Residue number {residue_num} not found in mapping for chain {chain_id}")
+                                    if file_path not in discrepancy_list:
+                                        discrepancy_list.append(file_path) 
+                    except IndexError as e:
+                            # print(f"IndexError in chain {chain_id}, start: {start_residue}, end: {end_residue}, residue: {residue_num}")
+                            # if file_path not in discrepancy_list:
+                            #             discrepancy_list.append(file_path) 
+                            continue
                 except ValueError as e:
                     print(f"Error parsing {'HELIX' if line.startswith('HELIX') else 'SHEET'} line: {line}")
 
-    # residue mapping for last (single) chain, or mention the chain id in the dictionary call
-    # if chain_id != '' and chain_id in residue_to_index.keys():
-    #     print(f"Residue to index mapping for chain {chain_id}: {residue_to_index[chain_id]}")
-
-    # for chain_id in sequences:
-    #     sequence_length = len(sequences[chain_id])
-    #     if chain_id not in secondary_structures:
-    #         initialize_secondary_structure(chain_id, sequence_length)
-    #     secondary_structures[chain_id] = secondary_structures[chain_id][:sequence_length]
-
-
-    return secondary_structures, discrepency_list
+    return secondary_structures, discrepancy_list
 
 def parse_pdb_multiple_chains(file_path):
     # Step 1: Sequence collection and residue-to-index mapping
-    sequences, residue_to_index, chain_start_residues, chain_end_residues, seqadv_residues = parse_sequences(file_path)
+    sequences, residue_to_index, chain_start_residues, chain_end_residues, seqadv_residues = parse_sequences(file_path, False)
     
     # Step 2: Secondary structure mapping
-    secondary_structures, discrepency_list = map_secondary_structure(file_path, sequences, residue_to_index)
+    secondary_structures, discrepancy_list = map_secondary_structure(file_path, sequences, residue_to_index)
 
-# this concats both dicts together. Further they are concatenated separately.
-    # if secondary_structures != {}:
-    #     for chain_id in secondary_structures:
-    #         if sequences[chain_id] != []:
-    #             sequences[chain_id] = ''.join(sequences[chain_id])
-    #             secondary_structures[chain_id] = ''.join(secondary_structures[chain_id])
+    if discrepancy_list != []:
+        try:
+            sequences, residue_to_index, chain_start_residues, chain_end_residues, seqadv_residues = parse_sequences(file_path, True)
+            secondary_structures, discrepancy_list = map_secondary_structure(file_path, sequences, residue_to_index)
+        except:
+            sequences, residue_to_index, chain_start_residues, chain_end_residues, seqadv_residues = parse_sequences(file_path, False)
+            secondary_structures, discrepancy_list = map_secondary_structure(file_path, sequences, residue_to_index)
+
 
     if secondary_structures != {}:
         for chain_id in secondary_structures:
@@ -406,172 +485,7 @@ def parse_pdb_multiple_chains(file_path):
             if sequences[chain_id] != []:
                 sequences[chain_id] = ''.join(sequences[chain_id])
         
-    return sequences, secondary_structures, discrepency_list
-
-# # Function to parse PDB files and extract sequences and secondary structures
-# def parse_pdb_multiple_chains(file_path):
-#     sequences = {}
-#     secondary_structures = {}
-#     residue_to_index = {}
-#     chain_start_residues = {}
-#     chain_end_residues = {}
-#     modres_mapping = {}
-#     seqadv_residues = {}
-
-#     # The decrepency list is used to store the file path of the PDB file that has a discrepancy between the HELIX/SHEET records and the SEQRES records i believe. 
-#     # And is necessary for build_dataset function to get all datasets with decrepency.
-#     discrepency_list = [] # Will return empty if a file has no discrepancy
-
-#     def three_to_one(residue):
-#         try:
-#             return seq1(residue)
-#         except:
-#             return 'X'
-        
-#     def initialize_secondary_structure(chain_id, length):
-#         secondary_structures[chain_id] = ['C'] * length
-
-#     def is_nucleotide_sequence(sequence):
-#         # List of 20 standard amino acids
-#         amino_acids = {
-#             'ALA', 'CYS', 'ASP', 'GLU', 'PHE',
-#             'GLY', 'HIS', 'ILE', 'LYS', 'LEU',
-#             'MET', 'ASN', 'PRO', 'GLN', 'ARG',
-#             'SER', 'THR', 'VAL', 'TRP', 'TYR',
-#             'MSE'  # Treat MSE as a valid amino acid equivalent to MET
-#         }
-#         return not all(residue in amino_acids for residue in sequence)
-    
-#     # def update_dict(start_residue, ):
-#     # def aggregate_dict(start_residue, ):
-
-
-#     with open(file_path, 'r') as file:
-#         # print(file_path)
-#         for line in file:
-#             # The DBREF has the start and end residue numbers for each chain, which is for mapping the residue numbers to the sequence indices
-#             if line.startswith('DBREF'):
-#                 chain_id = line[12]
-#                 start_residue = int(line[14:18].strip())
-#                 end_residue = int(line[20:24].strip())
-#                 if chain_id in chain_start_residues:
-#                     chain_start_residues[chain_id].append(start_residue)
-#                     chain_end_residues[chain_id].append(end_residue)
-#                 else:
-#                     chain_start_residues[chain_id] = [start_residue]
-#                     chain_end_residues[chain_id] = [end_residue]
-#             # The SEQADV has extra residues that are not in the SEQRES records
-#             elif line.startswith('SEQADV'):
-#                 chain_id = line[16]
-#                 seqadv_residue = int(line[18:22].strip())
-#                 # Track the smallest start residue for each chain considering SEQADV
-#                 if chain_id not in seqadv_residues:
-#                     seqadv_residues[chain_id] = []
-#                 seqadv_residues[chain_id].append(seqadv_residue)
-
-#             # The MODRES has the mapping of modified residues to the original residues
-#             # elif line.startswith('MODRES'):
-#             #     modres = line[12:15].strip()
-#             #     original_residue = line[24:27].strip()
-#             #     modres_mapping[modres] = original_residue
-
-#         # this changes the start_residue to the smallest residue number in the SEQADV records, but there are exceptions with this case.
-#         # # Adjust the start_residue based on SEQADV information
-#         # for chain_id, start_residue in chain_start_residues.items():
-#         #     for 
-#         #     if chain_id in seqadv_residues and seqadv_residues[chain_id] < start_residue:
-#         #         chain_start_residues[chain_id] = seqadv_residues[chain_id]
-
-#         file.seek(0)  # Reset file pointer to the beginning
-#         for line in file:
-#             if line.startswith('SEQRES'):
-#                 chain_id = line[11]
-#                 if chain_id not in sequences:
-#                     sequences[chain_id] = []
-#                     residue_to_index[chain_id] = {}
-#                 parts = line.split()
-#                 residues = parts[4:]
-#                 if is_nucleotide_sequence(residues):
-#                     # print(f"Nucleotide or non-protein sequence found in chain {chain_id}, skipping...")
-#                     continue
-#                 residues = [three_to_one(res) for res in residues]
-#                 seq_position = len(sequences[chain_id])
-#                 # print(seq_position)
-                
-#                 # Update residue to index mapping
-#                 for i in range(len(chain_start_residues[chain_id])):
-#                     while seq_position < len(residues) and seq_position <= chain_end_residues[chain_id][i] - chain_start_residues[chain_id][i]:
-#                         residue_number = chain_start_residues[chain_id][i] + seq_position
-#                         residue_to_index[chain_id][residue_number] = seq_position
-#                         seq_position += 1
-                    
-#                 # for region_idx, (start_residue, end_residue) in enumerate(zip(chain_start_residues[chain_id], chain_end_residues[chain_id])):
-#                 #     for i in range(start_residue, end_residue + 1):
-#                 #         if seq_position >= len(residues):
-#                 #             break
-#                 #         residue_number = i
-#                 #         residue_to_index[chain_id][residue_number] = seq_position
-#                 #         seq_position += 1   
-
-#                 # Handle any residues from SEQADV that need to be mapped
-#                 # if seqadv_residues[chain_id][-1] not in residue_to_index[chain_id]:
-#                 #     if chain_start_residues[chain_id][-1] < seqadv_residues[chain_id][-1]:
-
-#                 #         for seqadv_residue in seqadv_residues.get(chain_id, []):
-#                 #             if seqadv_residue not in residue_to_index[chain_id]:
-#                 #                 residue_to_index[chain_id][seqadv_residue] = seq_position
-#                 #                 seq_position += 1
-                    
-                    
-
-#                 sequences[chain_id].extend(residues)
-
-#                 # print(f"SEQRES: chain={chain_id}, residues={residues}")
-#             elif line.startswith('HELIX') or line.startswith('SHEET'):
-#                 chain_id = line[19] if line.startswith('HELIX') else line[21]
-#                 if chain_id not in sequences:
-#                     continue
-#                 try:
-#                     start_residue = int(line[21:25].strip()) if line.startswith('HELIX') else int(line[22:26].strip())
-#                     end_residue = int(line[33:37].strip())
-#                     sec_type = 'H' if line.startswith('HELIX') else 'E'
-#                     # print(f"{'HELIX' if line.startswith('HELIX') else 'SHEET'}: chain={chain_id}, start={start_residue}, end={end_residue}")
-
-#                     # Initialize secondary structure if not already done
-#                     if chain_id not in secondary_structures:
-#                         initialize_secondary_structure(chain_id, len(sequences[chain_id]))
-
-#                     # Debug print to show the mapping of residues
-#                     # print(f"Residue to index mapping for chain {chain_id}: {residue_to_index[chain_id]}")
-
-#                     # Update secondary structure
-#                     for residue_num in range(start_residue, end_residue + 1):
-#                         if residue_num in residue_to_index[chain_id]:
-#                             index = residue_to_index[chain_id][residue_num]
-#                             secondary_structures[chain_id][index] = sec_type
-#                             # print(f"Updating index {index} for chain {chain_id} to {sec_type}")
-#                         else:
-#                             # print(f"Residue number {residue_num} not found in mapping for chain {chain_id}")
-#                             if file_path not in discrepency_list:
-#                                 discrepency_list.append(file_path) 
-#                 except ValueError as e:
-#                     print(f"Error parsing {'HELIX' if line.startswith('HELIX') else 'SHEET'} line: {line}")
-
-#     # residue mapping for last (single) chain, or mention the chain id in the dictionary call
-#     print(f"Residue to index mapping for chain {'A'}: {residue_to_index['A']}")
-#     for chain_id in sequences:
-#         sequence_length = len(sequences[chain_id])
-#         if chain_id not in secondary_structures:
-#             initialize_secondary_structure(chain_id, sequence_length)
-#         secondary_structures[chain_id] = secondary_structures[chain_id][:sequence_length]
-
-#     for chain_id in sequences:
-#         sequences[chain_id] = ''.join(sequences[chain_id])
-#         secondary_structures[chain_id] = ''.join(secondary_structures[chain_id])
-
-#     return sequences, secondary_structures, discrepency_list
-
-# # Test the function
+    return sequences, secondary_structures, discrepancy_list
 
 # ------------------------------------------------------------------------------------------------------------------------------------
     
@@ -579,6 +493,8 @@ def get_random_pdb_id(pdb_ids):
     if not pdb_ids:
         return None
     return random.choice(pdb_ids)
+
+error_list = ['8I2G', '8DIP', '6VBR', '5R01', '6J1Z', '6CSV', '6EIY', '8DKO']
 
 discrepancy_ids =  ['1P6X', '1T8W', '1Q8Z', '2B8E', '2C9F', '2P2S', '2W9Z', '3A1A', '3K1K', '3L2L', '3M3M', '3O5O', '3U1U', '3W3W', '4B2B', '4E5E', 
                     '4Q7Q', '4Y5Y', '5H8H', '3R2C', '2B4D', '5C67', '5N8E', '5O8F', '5Z8Q', '6E8V', '6V9C', '6Z9G', '7N9U', '7T10', '7X14', '6SVB', 
@@ -639,162 +555,44 @@ discrepancy_ids3 = ['1Q8Z', '2C9F', '2W9Z', '3K1K', '3L2L', '4B2B', '4E5E', '4Y5
                     '1E9X', '6CSV', '4LGX', '1K5M', '3O2C', '3CQW', '4UEQ', '9EQF', '4KYA', '6EIY', '3LCO', '6CWX', '1DFJ', '2YG1', '4IJ8', '8DKO', 
                     '4R0K', '3BAI', '4EKK', '3QCX']
 
-discrepancy_ids4 = ['1X3A', '3M3M', '3O5O', '5N8E', '5O8F', '6O95', '7X14', '8F1C', '5LOM', '1V61', '3PXN', '3TGV', '7MK3', '1S8I', '6HTI', '2OMK', 
-                    '5AME', '7KRB', '8C5L', '7UEQ', '8HA2', '5US3', '6E18', '3CQ0', '2DM1', '4S3J', '5KXI', '5HMA', '1IRU', '7TQU', '3M5M', '3OU0', 
-                    '5PO3', '8FDS', '2O7H', '1KT2', '4HWV', '5JNQ', '2LML', '8K8E', '7SNX', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '8DIP', '3B2H', 
-                    '5PRK', '1MTQ', '6KCK', '4F5Z', '2YTS', '5JBR', '4YCA', '4DNH', '5PVQ', '6ESU', '3FH2', '1ZU5', '5J3N', '4IVJ', '5PTQ', '8P0C', 
-                    '5O9J', '5O7F', '7BG0', '5HEY', '1N0C', '4WP5', '6ZGT', '4Y5X', '2M4M', '3OUF', '3Q01', '5J0C', '2B9C', '5L3Y', '7W01', '5IPP', 
-                    '4IJ8', '8BZJ', '2YL9', '5PVJ', '6FU1']
+discrepancy_ids4 = ['1X3A', '3M3M', '3O5O', '5O8F', '6O95', '8F1C', '8Q1N', '5LOM', '1V61', '1QAJ', '3PXN', '3TGV', '7MK3', '1S8I', '6HTI', '2OMK', 
+                    '5AME', '7KRB', '8C5L', '7AJS', '7UEQ', '8HA2', '6E18', '3CQ0', '2DM1', '4S3J', '5KXI', '1IRU', '5PO3', '8FDS', '2O7H', '1KT2', 
+                    '4HWV', '5JNQ', '2LML', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '8DIP', '3B2H', '5PRK', '3K08', '6KCK', '8U26', '4F5Z', '2YTS', 
+                    '5JBR', '4YCA', '4DNH', '5PVQ', '6ESU', '8KDK', '2E01', '3FH2', '1ZU5', '5J3N', '4IVJ', '5PTQ', '3MLN', '2EX4', '8P0C', '5O9J', 
+                    '2A54', '5O7F', '7BG0', '5HEY', '4WP5', '6ZGT', '4Y5X', '2M4M', '3OUF', '3Q01', '5J0C', '2B9C', '5L3Y', '7W01', '5IPP', '8BZJ', 
+                    '2YL9', '3KMS', '5PVJ', '6FU1']
 
-discrepancy_ids5 = ['1X3A', '3M3M', '3O5O', '5O8F', '6O95', '8F1C', '8Q1N', '5LOM', '1V61', '1QAJ', '3PXN', '3TGV', '7MK3', '1S8I', '6HTI', '2OMK', 
-                    '5AME', '7KRB', '8C5L', '7UEQ', '8HA2', '6E18', '3CQ0', '2DM1', '4S3J', '5KXI', '1IRU', '5PO3', '8FDS', '2O7H', '1KT2', '4HWV', 
-                    '5JNQ', '2LML', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '8DIP', '3B2H', '5PRK', '6KCK', '4F5Z', '2YTS', '5JBR', '4YCA', '4DNH', 
-                    '5PVQ', '6ESU', '3FH2', '1ZU5', '5J3N', '4IVJ', '5PTQ', '3MLN', '8P0C', '5O9J', '5O7F', '7BG0', '5HEY', '4WP5', '6ZGT', '4Y5X', 
-                    '2M4M', '3OUF', '3Q01', '5J0C', '2B9C', '5L3Y', '7W01', '5IPP', '8BZJ', '2YL9', '3KMS', '5PVJ', '6FU1']
+discrepancy_ids5 = ['1X3A', '3D4D', '3M3M', '3O5O', '3W3W', '4Y5Y', '5O8F', '6M93', '6O95', '8F1C', '5LOM', '1V61', '8DFH', '1QAJ', '3PXN', '5T8U', 
+                    '3TGV', '7MK3', '1S8I', '8WLS', '5Z9P', '2OMK', '5UIP', '7KRB', '7AJS', '7UEQ', '6E18', '2DM1', '4S3J', '7B1A', '5KXI', '8AES', 
+                    '5APH', '1IRU', '7PEJ', '4JM8', '7XIX', '1KT2', '7P5Y', '7LM7', '4HWV', '5JNQ', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '3B2H', 
+                    '7F1O', '3K08', '8U26', '2YTS', '5X2B', '4DNH', '3FH2', '4NMZ', '1ZU5', '5J3N', '4IVJ', '7TYI', '2EX4', '2A54', '3KG2', '1P4I', 
+                    '4Y5X', '3OUF', '3Q01', '1MOY', '7W01', '5IPP']
 
-discrepancy_ids6 = ['1X3A', '3M3M', '3O5O', '5O8F', '6O95', '8F1C', '8Q1N', '5LOM', '1V61', '1QAJ', '3PXN', '3TGV', '7MK3', '1S8I', '6HTI', '2OMK', 
-                    '5AME', '7KRB', '8C5L', '7UEQ', '8HA2', '6E18', '3CQ0', '2DM1', '4S3J', '5KXI', '1IRU', '5PO3', '8FDS', '2O7H', '1KT2', '4HWV', 
-                    '5JNQ', '2LML', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '8DIP', '3B2H', '5PRK', '3K08', '6KCK', '4F5Z', '2YTS', '5JBR', '4YCA', 
-                    '4DNH', '5PVQ', '6ESU', '2E01', '3FH2', '1ZU5', '5J3N', '4IVJ', '5PTQ', '3MLN', '2EX4', '8P0C', '5O9J', '5O7F', '7BG0', '5HEY', 
-                    '4WP5', '6ZGT', '4Y5X', '2M4M', '3OUF', '3Q01', '5J0C', '2B9C', '5L3Y', '7W01', '5IPP', '8BZJ', '2YL9', '3KMS', '5PVJ', '6FU1']
+discrepancy_ids6 = ['3D4D', '3O5O', '3W3W', '5H8H', '5C67', '5O8F', '6M93', '1QAJ', '7MVS', '5T8U', '1S8I', '8WLS', '5Z9P', '2OMK', '7AM3', '8C5L', 
+                    '1P1N', '2XX8', '1IRU', '7PEJ', '4JM8', '7XIX', '1KT2', '5VO5', '7QSP', '1KM0', '8G0Q', '4FLR', '7F1O', '3K08', '7OGG', '8U26', 
+                    '8SWY', '4NMZ', '1ZU5', '5J3N', '4IVJ', '2EX4', '5O9J', '2A54', '3KG2', '7BG0', '1P4I', '3Q01', '5J0C', '1MOY', '5IPP', '6A44']
 
-discrepancy_ids7 = ['1X3A', '3M3M', '3O5O', '5O8F', '6O95', '8F1C', '8Q1N', '5LOM', '1V61', '1QAJ', '3PXN', '3TGV', '7MK3', '1S8I', '6HTI', '2OMK', 
-                    '5AME', '7KRB', '8C5L', '7UEQ', '8HA2', '6E18', '3CQ0', '2DM1', '4S3J', '5KXI', '1IRU', '5PO3', '8FDS', '2O7H', '1KT2', '4HWV', 
-                    '5JNQ', '2LML', '7QSP', '1KM0', '8G0Q', '4FLR', '4GHT', '8DIP', '3B2H', '5PRK', '3K08', '6KCK', '8U26', '4F5Z', '2YTS', '5JBR', 
-                    '4YCA', '4DNH', '5PVQ', '6ESU', '2E01', '3FH2', '1ZU5', '5J3N', '4IVJ', '5PTQ', '3MLN', '2EX4', '8P0C', '5O9J', '5O7F', '7BG0', 
-                    '5HEY', '4WP5', '6ZGT', '4Y5X', '2M4M', '3OUF', '3Q01', '5J0C', '2B9C', '5L3Y', '7W01', '5IPP', '8BZJ', '2YL9', '3KMS', '5PVJ', 
-                    '6FU1']
-
-error_ids = ['1BNA', '1C0A', '1GID', '1KX5', '1N8O', '1IDH', '1J5E', '1R2Y', '2C9F', '2M9P', '2N0Q', '3D4D', '3E5E', '3K1K', '3L2L', '3N4N', '3S9S', 
-             '3W3W', '4B2B', '4V2V', '4Y5Y', '5D4D', '3R2C', '2B4D', '5C67', '6A8R', '6E8V', '6G8X', '6L92', '6M93', '6V9C', '6Z9G', '7E9L', '7N9U', 
-             '7P9W', '8B18', '8P1M', '8Q1N', '7BJB', '6SVB', '4UAW', '8BX6', '7KJ0', '6HK4', '1KGW', '5DFP', '3KUT', '3SPZ', '6BRR', '1QAJ', '6OS0', 
-             '7MVS', '7FBQ', '2UZS', '1T1Y', '2DP4', '7AEG', '3LJ0', '4TU7', '4HWB', '1MA7', '4CT6', '1M5X', '2DVW', '6MBE', '4OI1', '8FU4', '8G6Q', 
-             '3BH8', '4JDI', '8GFZ', '4IQV', '8D4T', '6EIR', '8TVZ', '5T8U', '6I04', '3ZS1', '2H4E', '7P8X', '7YJK', '8E6J', '2VOV', '1IZL', '2P1Q', 
-             '4OFH', '7URF', '3BOI', '8WLS', '5Z9P', '1J82', '1RUH', '6YB1', '5QAF', '2CCF', '3RGH', '6WF5', '2L7U', '1WWF', '7UFA', '6RKU', '7EEN', 
-             '2KRB', '2KJE', '6GCF', '4LFB', '6AAH', '3K5Y', '2BCD', '4V1A', '7AM3', '5HBY', '2XEB', '1ZQH', '2YMP', '2KF7', '3IP4', '3A75', '5INQ', 
-             '8QAB', '6H6D', '7AJS', '3C5D', '1QJA', '3CI5', '3I2S', '2HYI', '5CR2', '1NTP', '3DSN', '5K75', '7YGD', '6DBW', '6XFG', '1P3K', '8I2G', 
-             '7O24', '2CLR', '3SOW', '6BKF', '2PXW', '2OKK', '4DMU', '6W8L', '4JUO', '6FAU', '8Q9K', '2BTC', '3MRQ', '7AZ1', '5Y7Y', '2HVP', '4K96', 
-             '5APH', '3T26', '7AUX', '287D', '1AL5', '6N87', '7PEJ', '2KB9', '4GXL', '1CLY', '1HJK', '3S46', '1RUO', '1J16', '1K4A', '1DWC', '3CWU', 
-             '4XBU', '3W5C', '4JM8', '1S5S', '4X9W', '4KRD', '5C1B', '8ICQ', '5KWY', '7JQR', '8BYJ', '8J2J', '7XIX', '7P5Y', '7COH', '7UY2', '6OPJ', 
-             '4NZ8', '8H1W', '4XSZ', '4REC', '7ONB', '6XK9', '6Z2F', '1XCU', '3OF6', '6DN2', '7PY3', '4HUK', '1UBP', '2N0B', '1O15', '5IGX', '3KLA', 
-             '3SYW', '3PML', '8KAK', '4TPG', '4LL8', '8OPS', '8OEA', '6H06', '7X1U', '8OPV', '3NA5', '8JKO', '6P5D', '8UW3', '7F1O', '4HJH', '5NUE', 
-             '8WY5', '1Y84', '6F0G', '4LJD', '8GW1', '1H7J', '3FO4', '7YS5', '6DWZ', '7PH1', '7FM6', '7YU8', '3K08', '1U6C', '4G4O', '5MXA', '3MFK', 
-             '2XJ1', '7XHD', '7OGG', '8FM0', '3G35', '4B5F', '5KI6', '1LLN', '8U26', '7TXJ', '3CXH', '6K3J', '7UL5', '7TFV', '3AXK', '5ZCK', '7AD0', 
-             '2SPT', '2FF4', '3J9B', '1CFL', '5EMW', '6XXM', '1MHH', '6BGV', '6CA0', '1WZ9', '5QB2', '2Z6Y', '4KN9', '5OQA', '1FU5', '6BA5', '5NBM', 
-             '4BEJ', '1WCM', '3N97', '5MAV', '4N56', '6HLO', '4HY2', '9F18', '8JI8', '6EF2', '3NWX', '2A39', '3C3O', '3PLI', '7UFO', '2N8L', '5IIM', 
-             '6M1U', '8GZV', '6SDW', '8TLF', '4DXN', '2X5U', '1PGX', '6DCC', '8KDK', '2HPE', '2M61', '2E01', '5IJS', '3GOJ', '4O5E', '7TFK', '6YP2', 
-             '4NMZ', '1RGT', '8BN1', '1LP9', '5CRK', '6QWM', '8HTD', '6YPP', '7TUF', '2KAE', '1G3F', '1SUE', '3MLN', '2WMA', '6Z00', '7FOV', '8SCH', 
-             '6M7U', '3D12', '2EX4', '8JLQ', '3T6Q', '8ENS', '7RI1', '6Y8C', '7ZLH', '2A54', '5NWI', '6DOI', '4JO2', '7MHZ', '7KPN', '6J1Z', '3KG2', 
-             '5O5B', '3Q3D', '7KT2', '7LVA', '3GV8', '2ARP', '5QTU', '3GY8', '4J1V', '3ANR', '6HMT', '8HTS', '1P4I', '7C07', '8JLN', '6C6U', '6FXS', 
-             '6SIQ', '4KYY', '8GOO', '2LDT', '6NUA', '4C0B', '4C4P', '6MQM', '8H1O', '6V2H', '2AOQ', '6JQ3', '1LJY', '1C5S', '1QN8', '1O2N', '5OOK', 
-             '4EST', '3UK4', '2MND', '6B0L', '6CSV', '4LGX', '8U5Z', '1K5M', '3O2C', '3CQW', '4PN1', '9EQF', '4KYA', '4NFO', '5HAB', '5F8G', '3LCO', 
-             '3VFN', '1MOY', '3NKQ', '3GXV', '8B19', '6BEM', '1WTV', '6P25', '6CWX', '4H1O', '1M8M', '1BX2', '1DFJ', '7ICO', '2ASB', '2YG1', '4U7U', 
-             '4CQV', '8DKO', '8G1P', '7W0A', '4QUG', '6F4S', '6DVK', '5YMW', '4R0K', '7SLC', '3BAI', '3KMS', '7NIX', '1LZH', '7ARC', '4EKK', '5E5A', 
-             '3QCX', '1EHZ']
-
-error_ids2 = ['1C0A', '1KX5', '1N8O', '1J5E', '1R2Y', '2C9F', '2M9P', '3D4D', '3K1K', '3L2L', '3S9S', '3W3W', '4B2B', '4V2V', '4Y5Y', '5D4D', '3R2C', 
-              '2B4D', '5C67', '6A8R', '6E8V', '6G8X', '6M93', '6V9C', '6Z9G', '7E9L', '7N9U', '7P9W', '8B18', '8P1M', '8Q1N', '7BJB', '6SVB', '4UAW', 
-              '8BX6', '7KJ0', '6HK4', '1KGW', '5DFP', '3KUT', '3SPZ', '6BRR', '1QAJ', '6OS0', '7MVS', '7FBQ', '2UZS', '1T1Y', '2DP4', '7AEG', '3LJ0', 
-              '4TU7', '4HWB', '1MA7', '4CT6', '1M5X', '2DVW', '6MBE', '4OI1', '8FU4', '8G6Q', '3BH8', '4JDI', '8GFZ', '4IQV', '8D4T', '6EIR', '5T8U', 
-              '6I04', '3ZS1', '2H4E', '7P8X', '7YJK', '8E6J', '2VOV', '1IZL', '2P1Q', '4OFH', '7URF', '8WLS', '5Z9P', '1J82', '1RUH', '6YB1', '5QAF', 
-              '2CCF', '3RGH', '6WF5', '2L7U', '1WWF', '7UFA', '6RKU', '2KRB', '2KJE', '6GCF', '4LFB', '6AAH', '3K5Y', '2BCD', '4V1A', '7AM3', '1ZQH', 
-              '2YMP', '3IP4', '3A75', '5INQ', '8QAB', '6H6D', '7AJS', '1QJA', '3CI5', '2HYI', '5CR2', '1NTP', '3DSN', '5K75', '6DBW', '1P3K', '8I2G', 
-              '7O24', '2CLR', '3SOW', '6BKF', '2PXW', '2OKK', '4DMU', '6W8L', '4JUO', '6FAU', '8Q9K', '2BTC', '3MRQ', '7AZ1', '5Y7Y', '4K96', '5APH', 
-              '3T26', '7AUX', '6N87', '7PEJ', '4GXL', '1CLY', '1HJK', '3S46', '1RUO', '1J16', '1DWC', '3CWU', '4XBU', '3W5C', '4JM8', '1S5S', '4X9W', 
-              '4KRD', '5C1B', '8ICQ', '5KWY', '7JQR', '8BYJ', '8J2J', '7XIX', '7P5Y', '7COH', '7UY2', '6OPJ', '4NZ8', '8H1W', '4XSZ', '4REC', '7ONB', 
-              '6XK9', '6Z2F', '3OF6', '7PY3', '4HUK', '1UBP', '5IGX', '3KLA', '3PML', '8KAK', '4TPG', '4LL8', '8OPS', '6H06', '7X1U', '8OPV', '3NA5', 
-              '8JKO', '6P5D', '8UW3', '7F1O', '4HJH', '5NUE', '8WY5', '6F0G', '4LJD', '8GW1', '6DWZ', '7PH1', '7FM6', '7YU8', '3K08', '4G4O', '5MXA', 
-              '3MFK', '2XJ1', '7OGG', '8FM0', '3G35', '4B5F', '5KI6', '1LLN', '8U26', '7TXJ', '3CXH', '6K3J', '7UL5', '3AXK', '7AD0', '2SPT', '2FF4', 
-              '3J9B', '5EMW', '6XXM', '1MHH', '6BGV', '6CA0', '1WZ9', '5QB2', '2Z6Y', '4KN9', '5OQA', '1FU5', '6BA5', '5NBM', '4BEJ', '1WCM', '3N97', 
-              '5MAV', '4N56', '6HLO', '4HY2', '9F18', '8JI8', '6EF2', '3NWX', '2A39', '3C3O', '3PLI', '7UFO', '2N8L', '5IIM', '6M1U', '8GZV', '6SDW', 
-              '8TLF', '4DXN', '2X5U', '1PGX', '6DCC', '8KDK', '2HPE', '2M61', '2E01', '5IJS', '4O5E', '7TFK', '6YP2', '4NMZ', '1RGT', '8BN1', '1LP9', 
-              '5CRK', '6QWM', '8HTD', '6YPP', '7TUF', '2KAE', '1G3F', '1SUE', '3MLN', '2WMA', '6Z00', '7FOV', '6M7U', '3D12', '2EX4', '8JLQ', '3T6Q', 
-              '8ENS', '7RI1', '6Y8C', '7ZLH', '2A54', '5NWI', '6DOI', '4JO2', '7MHZ', '7KPN', '6J1Z', '3KG2', '5O5B', '3Q3D', '7KT2', '3GV8', '2ARP', 
-              '5QTU', '3GY8', '4J1V', '3ANR', '6HMT', '8HTS', '1P4I', '7C07', '8JLN', '6C6U', '6FXS', '6SIQ', '8GOO', '6NUA', '4C0B', '4C4P', '6MQM', 
-              '8H1O', '6V2H', '2AOQ', '6JQ3', '1LJY', '1C5S', '1QN8', '1O2N', '5OOK', '4EST', '3UK4', '6B0L', '6CSV', '4LGX', '1K5M', '3O2C', '3CQW', 
-              '4PN1', '9EQF', '4KYA', '5HAB', '5F8G', '3LCO', '3VFN', '1MOY', '3NKQ', '3GXV', '8B19', '6BEM', '1WTV', '6P25', '6CWX', '4H1O', '1BX2', 
-              '1DFJ', '7ICO', '2ASB', '2YG1', '4U7U', '4CQV', '8DKO', '8G1P', '7W0A', '4QUG', '6F4S', '5YMW', '4R0K', '3BAI', '3KMS', '7NIX', '7ARC', 
-              '4EKK', '5E5A', '3QCX']
-
-error_ids3 = ['1KX5', '1N8O', '2C9F', '3D4D', '3K1K', '3L2L', '3S9S', '3W3W', '4B2B', '4Y5Y', '3R2C', '2B4D', '5C67', '6E8V', '6G8X', '6M93', '6V9C', 
-              '6Z9G', '7N9U', '7P9W', '8B18', '6SVB', '8BX6', '7KJ0', '6HK4', '1KGW', '5DFP', '3KUT', '6BRR', '6OS0', '7FBQ', '2UZS', '1T1Y', '2DP4', 
-              '3LJ0', '4TU7', '4HWB', '4CT6', '2DVW', '8FU4', '3BH8', '4JDI', '8GFZ', '8D4T', '6EIR', '5T8U', '6I04', '3ZS1', '2H4E', '7YJK', '8E6J', 
-              '2VOV', '1IZL', '2P1Q', '7URF', '8WLS', '5Z9P', '1J82', '1RUH', '6YB1', '5QAF', '2CCF', '3RGH', '7UFA', '2KRB', '2KJE', '6AAH', '4V1A', 
-              '7AM3', '2YMP', '3IP4', '3A75', '8QAB', '6H6D', '7AJS', '3CI5', '2HYI', '1NTP', '3DSN', '5K75', '8I2G', '2CLR', '2PXW', '2OKK', '6W8L', 
-              '8Q9K', '2BTC', '3MRQ', '7AZ1', '5Y7Y', '5APH', '3T26', '7AUX', '6N87', '7PEJ', '4GXL', '1CLY', '1HJK', '3S46', '1J16', '1DWC', '4XBU', 
-              '3W5C', '4JM8', '1S5S', '4KRD', '5C1B', '5KWY', '7JQR', '8BYJ', '8J2J', '7XIX', '7P5Y', '7COH', '7UY2', '6OPJ', '4NZ8', '8H1W', '4XSZ', 
-              '6XK9', '6Z2F', '3OF6', '4HUK', '1UBP', '5IGX', '3KLA', '3PML', '4LL8', '8OPS', '6H06', '8OPV', '3NA5', '6P5D', '7F1O', '4HJH', '5NUE', 
-              '6F0G', '4LJD', '6DWZ', '7PH1', '7FM6', '7YU8', '3K08', '5MXA', '2XJ1', '7OGG', '8FM0', '3G35', '1LLN', '8U26', '3CXH', '7UL5', '3AXK', 
-              '7AD0', '2SPT', '3J9B', '5EMW', '6XXM', '1MHH', '6BGV', '1WZ9', '5QB2', '2Z6Y', '4KN9', '5OQA', '1FU5', '6BA5', '5NBM', '4BEJ', '1WCM', 
-              '3N97', '5MAV', '6HLO', '9F18', '8JI8', '6EF2', '3NWX', '2A39', '3C3O', '3PLI', '7UFO', '6M1U', '8GZV', '4DXN', '2X5U', '1PGX', '8KDK', 
-              '2E01', '5IJS', '6YP2', '4NMZ', '1LP9', '8HTD', '6YPP', '7TUF', '1G3F', '1SUE', '2WMA', '6Z00', '7FOV', '3D12', '2EX4', '8JLQ', '3T6Q', 
-              '8ENS', '7RI1', '6Y8C', '7ZLH', '2A54', '4JO2', '7MHZ', '7KPN', '6J1Z', '3KG2', '5O5B', '7KT2', '2ARP', '5QTU', '3GY8', '4J1V', '3ANR', 
-              '8HTS', '1P4I', '8JLN', '6C6U', '6FXS', '8GOO', '4C0B', '4C4P', '6MQM', '8H1O', '6JQ3', '1LJY', '1C5S', '1O2N', '5OOK', '3UK4', '6B0L', 
-              '6CSV', '4LGX', '1K5M', '3O2C', '3CQW', '4PN1', '9EQF', '4KYA', '3LCO', '3VFN', '1MOY', '3NKQ', '3GXV', '8B19', '6P25', '6CWX', '4H1O', 
-              '1BX2', '1DFJ', '2YG1', '4U7U', '4CQV', '8DKO', '8G1P', '6F4S', '5YMW', '4R0K', '3BAI', '7ARC', '4EKK', '5E5A', '3QCX']
-
-error_ids4 = ['1N8O', '2C9F', '3K1K', '3L2L', '3S9S', '3W3W', '4B2B', '4Y5Y', '3R2C', '2B4D', '5C67', '6E8V', '6G8X', '6M93', '6V9C', '6Z9G', '7N9U', 
-              '7P9W', '8B18', '6SVB', '8BX6', '7KJ0', '6HK4', '1KGW', '5DFP', '3KUT', '6OS0', '7FBQ', '2UZS', '1T1Y', '2DP4', '3LJ0', '4TU7', '4HWB', 
-              '4CT6', '2DVW', '8FU4', '3BH8', '4JDI', '8GFZ', '8D4T', '6EIR', '6I04', '3ZS1', '2H4E', '7YJK', '8E6J', '2VOV', '1IZL', '2P1Q', '7URF', 
-              '8WLS', '5Z9P', '1J82', '1RUH', '6YB1', '5QAF', '2CCF', '3RGH', '2KRB', '2KJE', '6AAH', '4V1A', '7AM3', '2YMP', '3IP4', '3A75', '8QAB', 
-              '6H6D', '7AJS', '3CI5', '2HYI', '1NTP', '3DSN', '5K75', '8I2G', '2CLR', '2PXW', '2OKK', '6W8L', '2BTC', '3MRQ', '7AZ1', '5Y7Y', '5APH', 
-              '3T26', '7AUX', '6N87', '4GXL', '1CLY', '1HJK', '3S46', '1J16', '1DWC', '4XBU', '3W5C', '1S5S', '4KRD', '5C1B', '5KWY', '7JQR', '8BYJ', 
-              '8J2J', '7P5Y', '7COH', '7UY2', '6OPJ', '4NZ8', '8H1W', '4XSZ', '6XK9', '6Z2F', '3OF6', '4HUK', '1UBP', '5IGX', '3KLA', '3PML', '4LL8', 
-              '8OPS', '6H06', '8OPV', '3NA5', '6P5D', '4HJH', '5NUE', '6F0G', '4LJD', '6DWZ', '7PH1', '7FM6', '7YU8', '5MXA', '2XJ1', '7OGG', '8FM0', 
-              '3G35', '1LLN', '8U26', '3CXH', '7UL5', '3AXK', '7AD0', '2SPT', '3J9B', '5EMW', '6XXM', '1MHH', '6BGV', '1WZ9', '5QB2', '2Z6Y', '4KN9', 
-              '5OQA', '1FU5', '6BA5', '5NBM', '4BEJ', '1WCM', '5MAV', '6HLO', '9F18', '6EF2', '3NWX', '2A39', '3C3O', '3PLI', '7UFO', '6M1U', '8GZV', 
-              '4DXN', '2X5U', '8KDK', '5IJS', '6YP2', '1LP9', '8HTD', '6YPP', '7TUF', '1G3F', '1SUE', '2WMA', '6Z00', '7FOV', '3D12', '8JLQ', '3T6Q', 
-              '8ENS', '7RI1', '6Y8C', '7ZLH', '2A54', '4JO2', '7MHZ', '7KPN', '6J1Z', '5O5B', '7KT2', '2ARP', '5QTU', '3GY8', '4J1V', '3ANR', '8HTS', 
-              '1P4I', '8JLN', '6C6U', '6FXS', '8GOO', '4C0B', '4C4P', '6MQM', '8H1O', '6JQ3', '1C5S', '1O2N', '5OOK', '3UK4', '6B0L', '6CSV', '4LGX', 
-              '1K5M', '3O2C', '3CQW', '4PN1', '9EQF', '4KYA', '3LCO', '3VFN', '3GXV', '8B19', '6P25', '6CWX', '1BX2', '1DFJ', '2YG1', '4U7U', '8DKO', 
-              '8G1P', '6F4S', '5YMW', '4R0K', '3BAI', '7ARC', '4EKK', '5E5A', '3QCX']
-
-error_ids5 = ['3K1K', '3L2L', '3S9S', '3W3W', '4B2B', '4Y5Y', '3R2C', '2B4D', '5C67', '6E8V', '6G8X', '6M93', '6V9C', '6Z9G', '7N9U', '7P9W', '6SVB', 
-              '8BX6', '7KJ0', '6HK4', '1KGW', '5DFP', '6OS0', '7FBQ', '2UZS', '3LJ0', '4TU7', '4HWB', '4CT6', '2DVW', '8FU4', '3BH8', '4JDI', '8GFZ', 
-              '8D4T', '6EIR', '6I04', '3ZS1', '2H4E', '7YJK', '8E6J', '2VOV', '1IZL', '8WLS', '5Z9P', '1J82', '6YB1', '5QAF', '2CCF', '3RGH', '2KJE', 
-              '6AAH', '4V1A', '7AM3', '2YMP', '3IP4', '3A75', '8QAB', '7AJS', '3CI5', '2HYI', '1NTP', '3DSN', '5K75', '8I2G', '2PXW', '2OKK', '6W8L', 
-              '2BTC', '5Y7Y', '5APH', '3T26', '7AUX', '6N87', '1CLY', '1HJK', '3S46', '1J16', '4XBU', '3W5C', '1S5S', '4KRD', '5KWY', '7JQR', '8J2J', 
-              '7P5Y', '7COH', '7UY2', '6OPJ', '8H1W', '4XSZ', '6XK9', '6Z2F', '3OF6', '4HUK', '1UBP', '5IGX', '3PML', '4LL8', '6H06', '8OPV', '3NA5', 
-              '6P5D', '4HJH', '5NUE', '6F0G', '4LJD', '6DWZ', '7PH1', '7FM6', '7YU8', '5MXA', '2XJ1', '7OGG', '8FM0', '3G35', '1LLN', '3CXH', '7UL5', 
-              '3AXK', '7AD0', '2SPT', '3J9B', '5EMW', '6XXM', '1MHH', '6BGV', '1WZ9', '5QB2', '2Z6Y', '4KN9', '5OQA', '6BA5', '5NBM', '4BEJ', '1WCM', 
-              '5MAV', '6HLO', '9F18', '3NWX', '2A39', '3C3O', '3PLI', '6M1U', '8GZV', '4DXN', '2X5U', '8KDK', '5IJS', '6YP2', '1LP9', '8HTD', '6YPP', 
-              '7TUF', '1G3F', '1SUE', '2WMA', '7FOV', '3D12', '8JLQ', '3T6Q', '7RI1', '6Y8C', '7ZLH', '2A54', '7KPN', '6J1Z', '7KT2', '2ARP', '3GY8', 
-              '3ANR', '8HTS', '1P4I', '8JLN', '6C6U', '6FXS', '8GOO', '4C0B', '4C4P', '8H1O', '1C5S', '1O2N', '5OOK', '6B0L', '6CSV', '4LGX', '1K5M', 
-              '3O2C', '3CQW', '9EQF', '4KYA', '3LCO', '3GXV', '6CWX', '1DFJ', '2YG1', '4U7U', '8DKO', '8G1P', '5YMW', '4R0K', '3BAI', '4EKK', '3QCX']
-
-
-# A = 'VHLFEWRWVDIALECERYLAPKGFGGVQVSPPNENVAIYNPFRPWWERYQPVSYKLCTRSGNEDEFRNMVTRCNNVGVRIYVDAVINHMCGNAVSAGTSSTCGSYFNPGSRDFPAVPYSGWDFNDGKCKTGSGDIENYNDATQVRDCRLTGLLDLALEKDYVRSKIAEYMNHLIDIGVAGFRLDASKHMWPGDIKAILDKLHNLNSNWFPAGSKPFIYQEVIDLGGEPIKSSDYFGNGRVTEFKYGAKLGTVIRKWNGEKMSYLKNWGEGWGFVPSDRALVFVDNHDNQRGHGAGGASILTFWDARLYKMAVGFMLAHPYGFTRVMSSYRWPRQFQNGNDVNDWVGPPNNNGVIKEVTINPDTTCGNDWVCEHRWRQIRNMVIFRNVVDGQPFTNWYDNGSNQVAFGRGNRGFIVFNNDDWSFSLTLQTGLPAGTYCDVISGDKINGNCTGIKIYVSDDGKAHFSISNSAEDPFIAIHAESKL'
-# B = 'CCCCCCCCCCEEEEECCCHHHHHHHHHHHHCCCCCCCEEEECCCCCCCCCCCCCCHHHHHHHCCCCCCCCCCCHHHHHHHHHHHHHHHCCEEEEEECCCEEEECCCCCCCCCCCCCCCCCCCCCCCCCCCHHHHHCCCCCCCCCCCCCCCCHHHHHHHHCCCCEEECCCCHHHHHHHHHHHHHHHHHHHCCEEEECHHHHHHHHHHHHHHHCCCCCCCCCCCCCCCCEEEECCCCCCCCCCHHHHHHCCCEEEHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHCCHHHCEEECCCCCHHHHHCCCHHHHHCHHHHHHHHHHHHHHHHHHCCCEEEEEECCCCCCCEECCEECCCCCCCCEECCEECCCCCCCCCCCCCCCCHHHHHHHHHHHHHHHHHHHCCCEEEEEECCCCEEEEEECCCEEEEEECCCCCEEEEEECCCCCEEEECCCCCCEECCEECCCEEEECCCCEEEEEECCCCC'
-
-# print(len(A))
-# print(len(B))
 # count_list(discrepancy_ids)
 # count_list(discrepancy_ids2)
 # count_list(discrepancy_ids3)
 # count_list(discrepancy_ids4)
 # count_list(discrepancy_ids5)
 # count_list(discrepancy_ids6)
-# count_list(discrepancy_ids7)
-# count_list(error_ids)
-# count_list(error_ids2)
-# count_list(error_ids3)
-# count_list(error_ids4)
-# count_list(error_ids5)
 # duplicates(discrepancy_ids6)
 
-# print(get_random_pdb_id(error_ids5))
+# print(get_random_pdb_id(discrepancy_ids6))
 
 
 # for the files which doesn't have the position in the sequence do a pre-check and add that position. Also look into SEQADV and what it is.
 # IF it is meaningful and relevant, then take it into account
 
-# Test and study discrepency files here 
-# result = parse_pdb_multiple_chains("pdb_files/pdb3bai.ent")
+# # Test and study discrepency files here 
+# result = parse_pdb_multiple_chains("pdb_files/pdb3gxv.ent") #1q8z
 # if result is not None:
-#     sequences, secondary_structures, discrepency_list = result
+#     sequences, secondary_structures, discrepancy_list = result
 #     print(sequences)
 #     print(secondary_structures)
-#     print(discrepency_list)
+#     print(discrepancy_list)
 # else:
 #     print("The function returned None.")
 
@@ -932,6 +730,7 @@ def decode_structures(encoding):
 
 # ------------------------------------------------------------------------------------------------------------------------------------
 # change max length to 300, 350. But for now 400 is fine.
+# Consider chaching the files to avoid downloading them again and again.
 # Function to build the dataset
 def build_dataset(pdb_ids, pdb_dir='pdb_files', max_length=400):
     X, y = [], []
@@ -959,7 +758,6 @@ def build_dataset(pdb_ids, pdb_dir='pdb_files', max_length=400):
 # # Build the dataset
 # X, y, error_list, discrepancy_list = build_dataset(pdb_ids)
 # print(f'Dataset shape: X={X.shape}, y={y.shape}')
-
 # print("\n" + "Error List:")
 # print(error_list)
 # print(count_list(error_list))
