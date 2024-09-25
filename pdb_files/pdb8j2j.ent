@@ -377,8 +377,8 @@ REMARK 525  M RES CSSEQI
 REMARK 525    HOH A 677        DISTANCE =  5.82 ANGSTROMS                       
 REMARK 525    HOH A 678        DISTANCE =  8.23 ANGSTROMS                       
 REMARK 525    HOH B 684        DISTANCE =  6.59 ANGSTROMS                       
-DBREF  8J2J A  -26   217  PDB    8J2J     8J2J           -26    217             
-DBREF  8J2J B  -26   217  PDB    8J2J     8J2J           -26    217             
+DBREF  8J2J A  -26   217  PDB    8J2J     8J2J           -24    217             
+DBREF  8J2J B  -26   217  PDB    8J2J     8J2J           -24    217             
 SEQRES   1 A  242  MET GLY SER SER HIS HIS HIS HIS HIS HIS TRP SER HIS          
 SEQRES   2 A  242  PRO GLN PHE GLU LYS GLU ASN LEU TYR PHE GLN GLY GLY          
 SEQRES   3 A  242  GLY MET ALA SER THR PRO PHE LYS PHE GLN LEU LYS GLY          
