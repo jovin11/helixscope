@@ -1,6 +1,18 @@
 # Python
-python_service/venv/
 __pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Environment variables
 .env
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
