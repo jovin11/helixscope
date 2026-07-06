@@ -39,7 +39,7 @@ where = ["python_service"]
 include = ["pssp*"]
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=python_service/pssp --cov-report=term-missing"
+addopts = "-q"
 pythonpath = ["python_service"]
 testpaths = ["tests"]
 
