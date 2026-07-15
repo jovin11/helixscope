@@ -2,8 +2,6 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
-venv/
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -11,8 +9,19 @@ htmlcov/
 
 # Environment variables
 .env
+.venv/
+venv/
 
 # Editors and operating systems
 .DS_Store
 .idea/
 .vscode/
+.VSCodeCounter/
+
+# Research datasets
+pdb_files/
+
+# Trained model artifacts
+# Prefer Git LFS or GitHub Releases for these
+# *.keras
+# *.h5
