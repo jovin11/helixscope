@@ -1,6 +1,0 @@
-flask
-biopython
-tensorflow
-numpy
-matplotlib
-scikit-learn
