@@ -12,7 +12,7 @@ assigns each position to **helix (H)**, **sheet (E)**, or **coil (C)**.
 
 The repository includes the trained Keras model, PDB data-preparation research,
 a versioned JSON API, command-line inference, a responsive visualization, tests,
-CI, and container deployment.
+CI, and Docker support.
 
 <p align="center">
   <img
@@ -20,10 +20,6 @@ CI, and container deployment.
     alt="HelixScope showing residue-level Q3 protein secondary structure predictions"
     width="900"
   >
-</p>
-
-<p align="center">
-  <a href="YOUR_DEPLOYMENT_URL"><strong>Try the live demo</strong></a>
 </p>
 
 > This is an educational research project, not a clinical or laboratory tool.
@@ -50,7 +46,7 @@ confidence.
 |:---:|---|---|
 | `H` | α-helix | <span style="color:#E04A3F"> ■ Coral Red </span> |
 | `E` | β-sheet | <span style="color:#2B6CB0"> ■ Blue </span> |
-| `C` | Coil / other | <span style="color:#718096"> ■ Slat e</span> |
+| `C` | Coil / other | <span style="color:#718096"> ■ Slate </span> |
 
 
 ## Architecture
