@@ -14,6 +14,18 @@ The repository includes the trained Keras model, PDB data-preparation research,
 a versioned JSON API, command-line inference, a responsive visualization, tests,
 CI, and container deployment.
 
+<p align="center">
+  <img
+    src="docs/assets/helixscope-demo.png"
+    alt="HelixScope showing residue-level Q3 protein secondary structure predictions"
+    width="900"
+  >
+</p>
+
+<p align="center">
+  <a href="YOUR_DEPLOYMENT_URL"><strong>Try the live demo</strong></a>
+</p>
+
 > This is an educational research project, not a clinical or laboratory tool.
 > Predictions should be validated with established methods and experimental data.
 
