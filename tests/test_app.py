@@ -1,6 +1,5 @@
 from app import create_app
-from pssp_model import Prediction
-from pssp_model import normalize_sequence
+from pssp_model import Prediction, normalize_sequence
 
 
 class StubPredictor:

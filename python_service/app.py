@@ -12,10 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
-
-from pssp_model import ProteinStructurePredictor
-from pssp_model import SequenceValidationError
-
+from pssp_model import ProteinStructurePredictor, SequenceValidationError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "best_model_v2.keras"
