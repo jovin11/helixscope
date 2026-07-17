@@ -36,10 +36,10 @@ py-modules = ["app", "cli"]
 
 [tool.setuptools.packages.find]
 where = ["python_service"]
-include = ["pssp*"]
+include = ["pssp_model*"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --cov=pssp_model --cov=app --cov-report=term-missing"
 pythonpath = ["python_service"]
 testpaths = ["tests"]
 

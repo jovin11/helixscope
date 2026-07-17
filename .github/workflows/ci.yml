@@ -4,29 +4,41 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: pyproject.toml
+
       - name: Install test dependencies
-        run: python -m pip install -e ".[dev]"
-      - name: Lint
-        run: python -m ruff check . --exit-zero
-      - name: Compile Python sources
-        run: python -m compileall -q .
-      - name: Test
         run: |
-          if [ -d tests ] && find tests -name "test_*.py" -o -name "*_test.py" | grep -q .; then
-            python -m pytest
-          else
-            echo "No tests found; skipping pytest."
-          fi
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Compile Python sources
+        run: python -m compileall -q python_service tests scripts
+
+      - name: Test
+        run: python -m pytest

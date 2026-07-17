@@ -1,60 +1,111 @@
+"""Flask application for protein secondary-structure inference.
+
+The application uses an app factory so it can be tested without loading the
+TensorFlow model. The production predictor loads its model lazily on the first
+prediction request, keeping health checks fast and inexpensive.
+"""
+
+from __future__ import annotations
+
 import os
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from tensorflow.keras.models import load_model
-from pssp_model.pssp_model import preprocess_sequences, decode_structures
-import numpy as np
+from pathlib import Path
+from typing import Any
+
+from flask import Flask, jsonify, render_template, request
+from pssp_model import ProteinStructurePredictor, SequenceValidationError
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "best_model_v2.keras"
 
 
-# Get the directory of the current file
-current_dir = os.path.dirname(os.path.abspath(__file__))
+def create_app(
+    config: dict[str, Any] | None = None,
+    *,
+    predictor: ProteinStructurePredictor | None = None,
+) -> Flask:
+    """Create and configure the web application.
 
-# Define paths for the templates and static folders
-template_dir = os.path.join(current_dir, '../public/templates')
-static_dir = os.path.join(current_dir, '../public/static')
+    A predictor may be injected by tests or alternate deployments. When it is
+    omitted, the configured Keras model is loaded only when inference begins.
+    """
 
-app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
+    app = Flask(
+        __name__,
+        template_folder=str(PROJECT_ROOT / "public" / "templates"),
+        static_folder=str(PROJECT_ROOT / "public" / "static"),
+    )
+    app.config.from_mapping(
+        MODEL_PATH=os.getenv("PSSP_MODEL_PATH", str(DEFAULT_MODEL_PATH)),
+        MAX_SEQUENCE_LENGTH=int(os.getenv("PSSP_MAX_SEQUENCE_LENGTH", "400")),
+        MAX_CONTENT_LENGTH=64 * 1024,
+        JSON_SORT_KEYS=False,
+    )
+    if config:
+        app.config.update(config)
 
-# Load the pre-trained model
-model = load_model(os.path.join(current_dir, '../best_model_v2.keras'))
+    prediction_service = predictor or ProteinStructurePredictor(
+        model_path=app.config["MODEL_PATH"],
+        max_length=app.config["MAX_SEQUENCE_LENGTH"],
+    )
+    app.extensions["prediction_service"] = prediction_service
 
-@app.route('/')
-def home():
-    return render_template('pssp.html')
+    @app.get("/")
+    def home() -> str:
+        return render_template(
+            "pssp.html", max_sequence_length=prediction_service.max_length
+        )
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    input_data = request.json['input_data']
-    
-    # Assuming input_data is a single amino acid sequence provided as a string
-    if isinstance(input_data, str):
-        # Preprocess the sequence using the preprocess_sequences function
-        processed_input = preprocess_sequences(input_data)
-        
-        # Reshape the processed input to match the model's expected input shape
-        processed_input = np.expand_dims(processed_input, axis=0)  # Add batch dimension
-        
-        # Make predictions using the model
-        prediction = model.predict(processed_input)
+    @app.get("/health")
+    def health():
+        return jsonify(
+            {
+                "status": "ok",
+                "service": "helixscope",
+                "model": prediction_service.status(),
+            }
+        )
 
-        # Trim the prediction to match the input sequence length
-        trimmed_prediction = prediction[0][:len(input_data)]
+    @app.errorhandler(413)
+    def payload_too_large(_error):
+        return jsonify({"error": "Request body exceeds the 64 KiB limit."}), 413
 
-        # # Debugging: Print input length and prediction shape
-        # print(f"Input length: {len(input_data)}, Prediction shape: {prediction.shape}")
-        
-        # Decode the predicted output back to the secondary structure string
-        decoded_prediction = decode_structures(trimmed_prediction)
+    def predict_response():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Request body must be a JSON object."}), 400
 
-        # # Debugging: Print the decoded prediction length
-        # print(f"Decoded prediction length: {len(decoded_prediction)}")
-        
-        # Return the decoded prediction as a JSON response
-        return jsonify({'prediction': decoded_prediction})
-    
-    else:
-        return jsonify({'error': 'Invalid input data. Please provide a valid amino acid sequence.'}), 400
-    
+        # ``input_data`` remains supported for clients of the original API.
+        sequence = payload.get("sequence", payload.get("input_data"))
+        if not isinstance(sequence, str):
+            return jsonify({"error": "The 'sequence' field must be a string."}), 400
+
+        try:
+            result = prediction_service.predict(sequence)
+        except SequenceValidationError as exc:
+            return jsonify({"error": str(exc), "details": exc.to_dict()}), 422
+        except FileNotFoundError:
+            app.logger.exception("Configured model file was not found")
+            return jsonify({"error": "The prediction model is unavailable."}), 503
+        except Exception:
+            app.logger.exception("Prediction failed")
+            return jsonify({"error": "Prediction failed. Please try again."}), 500
+
+        return jsonify(result.to_dict())
+
+    app.add_url_rule(
+        "/api/v1/predict", "predict_v1", predict_response, methods=["POST"]
+    )
+    app.add_url_rule("/predict", "predict_legacy", predict_response, methods=["POST"])
+
+    return app
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+app = create_app()
+
+
+if __name__ == "__main__":
+    app.run(
+        host=os.getenv("PSSP_HOST", "127.0.0.1"),
+        port=int(os.getenv("PSSP_PORT", "5001")),
+        debug=os.getenv("FLASK_DEBUG", "0") == "1",
+    )

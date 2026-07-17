@@ -1,71 +1,152 @@
-<!DOCTYPE html>
-
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>PSSP</title>
-    <style>
-        #predictionResult {
-            white-space: pre-wrap; /* Allows line breaks in the prediction result */
-            word-wrap: break-word; /* Ensures long words or lines break to fit within the container */
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-top: 10px;
-            max-height: 200px; /* Limits the height of the prediction box */
-            overflow-y: auto; /* Adds a scrollbar if the content exceeds the max height */
-            background-color: #f4f4f4; /* Optional: Adds a background color to the output box */
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Residue-level protein secondary structure prediction with a hybrid CNN-LSTM model.">
+    <title>HelixScope · Protein Structure Prediction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='pssp.css') }}">
+    <script defer src="{{ url_for('static', filename='pssp.js') }}"></script>
 </head>
 <body>
-    <h1>Protein Secondary Structure Predictor</h1>
-    <p>This project is a web application for predicting the secondary structure of proteins from their amino acid sequences.</p>
+    <div class="page-shell">
+        <nav class="nav" aria-label="Primary navigation">
+            <a class="brand" href="/" aria-label="HelixScope home">
+                <span class="brand-mark" aria-hidden="true">H</span>
+                <span>HelixScope</span>
+            </a>
+            <div class="nav-meta">
+                <span class="status-dot" aria-hidden="true"></span>
+                CNN–LSTM · Q3
+            </div>
+        </nav>
 
-    <h2>Features</h2>
-    <p>Secondary Structure Prediction: Predicts alpha-helices, beta-sheets, and coils from amino acid sequences.</p>
-    <p>Web Interface: Simple web interface for inputting protein sequences and viewing predictions.</p>
+        <main>
+            <section class="hero">
+                <div>
+                    <p class="eyebrow">Protein secondary structure · residue by residue</p>
+                    <h1>Turn a protein sequence into a structural hypothesis.</h1>
+                </div>
+                <p class="hero-copy">
+                    Explore helix, sheet, and coil assignments from a hybrid convolutional
+                    and recurrent neural network trained on Protein Data Bank structures.
+                </p>
+            </section>
 
-    <h2>Predict Secondary Structure</h2>
-    <form id="predictionForm">
-        <label for="sequenceInput">Amino Acid Sequence:</label><br>
-        <textarea id="sequenceInput" rows="4" cols="50"></textarea><br><br>
-        <button type="button" onclick="makePrediction()">Predict</button>
-        <button type="button" onclick="clearPrediction()">Clear</button>
-    </form>
+            <section class="workspace" aria-labelledby="predict-heading">
+                <div class="input-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="step-label">01 · Input</span>
+                            <h2 id="predict-heading">Amino-acid sequence</h2>
+                        </div>
+                        <span id="sequenceCount" class="sequence-count">0 / {{ max_sequence_length }}</span>
+                    </div>
 
-    <h2>Prediction Result</h2>
-    <pre id="predictionResult">Your prediction will appear here.</pre>
+                    <form id="predictionForm">
+                        <label class="sr-only" for="sequenceInput">Protein sequence</label>
+                        <textarea
+                            id="sequenceInput"
+                            name="sequence"
+                            rows="11"
+                            maxlength="{{ max_sequence_length + 100 }}"
+                            placeholder=">optional_fasta_header&#10;MKTIIALSYIFCLVFADYKDDDDK"
+                            spellcheck="false"
+                            autocomplete="off"
+                            aria-describedby="sequenceHint formError"
+                            required
+                        ></textarea>
+                        <p id="sequenceHint" class="input-hint">
+                            Plain sequence or single-record FASTA · 20 canonical residues ·
+                            max {{ max_sequence_length }} aa
+                        </p>
+                        <p id="formError" class="form-error" role="alert" hidden></p>
 
-    <!-- Inline JavaScript -->
-    <script>
-        function makePrediction() {
-            const sequence = document.getElementById('sequenceInput').value;
+                        <div class="form-actions">
+                            <button class="button button-primary" id="predictButton" type="submit">
+                                <span class="button-label">Run prediction</span>
+                                <span class="button-arrow" aria-hidden="true">↗</span>
+                            </button>
+                            <button class="button button-secondary" id="exampleButton" type="button">
+                                Load example
+                            </button>
+                            <button class="text-button" id="clearButton" type="button">Clear</button>
+                        </div>
+                    </form>
+                </div>
 
-            fetch('/predict', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    input_data: sequence  // Send as a single string
-                }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Format the prediction by adding line breaks after each character
-                document.getElementById('predictionResult').innerText = `Prediction:\n${data.prediction}`;
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                document.getElementById('predictionResult').innerText = `Error: Could not get prediction.`;
-            });
-        }
+                <div class="result-panel" id="resultPanel" aria-live="polite">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="step-label">02 · Output</span>
+                            <h2>Predicted structure</h2>
+                        </div>
+                        <button class="copy-button" id="copyButton" type="button" hidden>Copy result</button>
+                    </div>
 
-        function clearPrediction() {
-            // Clear the prediction result
-            document.getElementById('predictionResult').innerText = 'Your prediction will appear here.';
-        }
-    </script>
+                    <div id="emptyState" class="empty-state">
+                        <div class="empty-glyph" aria-hidden="true">
+                            <span></span><span></span><span></span><span></span><span></span>
+                        </div>
+                        <p>Your residue map will appear here.</p>
+                        <span>Submit a sequence to begin inference.</span>
+                    </div>
+
+                    <div id="loadingState" class="loading-state" hidden>
+                        <div class="loader" aria-hidden="true"></div>
+                        <p>Evaluating local sequence context…</p>
+                    </div>
+
+                    <div id="predictionOutput" hidden>
+                        <div class="metrics" id="metrics"></div>
+                        <div class="legend" aria-label="Secondary structure legend">
+                            <span><i class="legend-swatch helix"></i>H · Helix</span>
+                            <span><i class="legend-swatch sheet"></i>E · Sheet</span>
+                            <span><i class="legend-swatch coil"></i>C · Coil</span>
+                        </div>
+                        <div id="structureTrack" class="structure-track" aria-label="Predicted residue structure"></div>
+                        <div id="sequenceAlignment" class="sequence-alignment"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="method" aria-labelledby="method-heading">
+                <div>
+                    <span class="step-label">How it works</span>
+                    <h2 id="method-heading">Local motifs meet long-range context.</h2>
+                </div>
+                <div class="method-grid">
+                    <article>
+                        <span>01</span>
+                        <h3>Encode</h3>
+                        <p>Canonical amino acids become padded, residue-level one-hot vectors.</p>
+                    </article>
+                    <article>
+                        <span>02</span>
+                        <h3>Extract</h3>
+                        <p>Stacked 1D convolutions detect local sequence motifs and patterns.</p>
+                    </article>
+                    <article>
+                        <span>03</span>
+                        <h3>Contextualize</h3>
+                        <p>LSTM layers model dependencies across the full protein sequence.</p>
+                    </article>
+                    <article>
+                        <span>04</span>
+                        <h3>Classify</h3>
+                        <p>Each residue receives helix, sheet, or coil probabilities.</p>
+                    </article>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Research prototype · Predictions are not a substitute for experimental validation.</p>
+            <a href="https://github.com/jovin11/helixscope">View source ↗</a>
+        </footer>
+    </div>
 </body>
 </html>
-
-
