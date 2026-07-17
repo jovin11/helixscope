@@ -9,5 +9,3 @@ __pycache__
 venv
 pdb_files
 tests
-best_model.keras
-pssp_model1.h5
