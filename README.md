@@ -244,3 +244,7 @@ recommended evaluation work.
 
 Contributions that improve reproducibility, evaluation, or biological validation
 are especially welcome.
+
+## License
+
+This project, including the bundled model artifact, is licensed under the [MIT License](LICENSE).
