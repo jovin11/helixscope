@@ -74,20 +74,22 @@ def download_structure(pdb_id: str, destination: Path) -> None:
     temp_path: Path | None = None
 
     try:
-        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            with tempfile.NamedTemporaryFile(
+        with (
+            urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response,
+            tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=destination.parent,
                 prefix=f".{destination.name}.",
                 suffix=".tmp",
                 delete=False,
-            ) as temp_file:
-                temp_path = Path(temp_file.name)
-                while True:
-                    chunk = response.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    temp_file.write(chunk)
+            ) as temp_file,
+        ):
+            temp_path = Path(temp_file.name)
+            while True:
+                chunk = response.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                temp_file.write(chunk)
 
         if temp_path is None or temp_path.stat().st_size == 0:
             raise RuntimeError("downloaded file is empty")
