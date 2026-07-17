@@ -1,0 +1,13 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+__pycache__
+*.py[cod]
+.env
+.venv
+venv
+pdb_files
+tests
+best_model.keras
+pssp_model1.h5
