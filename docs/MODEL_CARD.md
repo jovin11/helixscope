@@ -23,12 +23,18 @@ lazy-loaded until the first prediction request.
 | Task | Residue-level protein secondary structure prediction |
 | Output space | Q3: helix (`H`), sheet (`E`), coil (`C`) |
 | Input | Up to 400 canonical amino-acid residues |
-| Encoding | 20-channel one-hot representation, zero-padded to 400 |
-| Architecture | 4 Conv1D blocks, batch normalization, 3 LSTMs, time-distributed classifier |
+| Encoding | 20-channel one-hot representation, zero-padded to 400 positions |
+| Architecture | 4 Conv1D blocks, batch normalization, 3 stacked LSTMs, and a time-distributed classifier |
+| Parameters | 646,211 model parameters: 645,699 trainable and 512 non-trainable |
 | Framework | TensorFlow / Keras |
 | Current artifact | `best_model_v2.keras` |
 | Artifact SHA-256 | `2cc08c588cb072880b3a8782393a32758b5a4f178fbbd80bee7b13eec32ec683` |
 | Artifact saved | 2024-08-29 with Keras 3.5.0 |
+
+Each convolutional block uses a kernel size of 3, L2 regularization,
+sequence-length-preserving pooling, and dropout. All three LSTMs return a
+representation for every residue, allowing the time-distributed classifier to
+produce a separate Q3 probability distribution at each sequence position.
 
 ## Intended use
 

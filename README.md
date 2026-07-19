@@ -66,6 +66,9 @@ stack carries information across positions, and a time-distributed classifier
 produces one probability vector for each residue. Inputs are padded to the saved
 model shape of `(400, 20)` and predictions are trimmed back to the input length.
 
+The model contains **646,211 parameters**: 645,699 trainable and 512
+non-trainable.
+
 ## Quick start
 
 ### 1. Create an environment
